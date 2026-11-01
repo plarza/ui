@@ -1,51 +1,9 @@
 import SwiftUI
 
-/// The page behind the profile button: your aza account at the top, the app's own sections, then Appearance.
-/// Push the app's own pages with `NavigationLink(value:)` and `.navigationDestination` inside `content`.
-public struct ProfilePage<Content: View>: View {
-    private let external: Binding<NavigationPath>?
-    @State private var own = NavigationPath()
-    @ViewBuilder let content: Content
-    @Environment(\.dismiss) private var dismiss
-
-    public init(path: Binding<NavigationPath>? = nil, @ViewBuilder content: () -> Content) {
-        external = path
-        self.content = content()
-    }
-
-    public var body: some View {
-        NavigationStack(path: external ?? $own) {
-            ScrollView {
-                VStack(alignment: .leading, spacing: 12) {
-                    AccountRow()
-                    content
-                    Heading("Appearance")
-                    AppearanceSection()
-                }
-                .padding(.horizontal, 20)
-                .padding(.bottom, 30)
-            }
-            .background(Backdrop())
-            .navigationTitle("Profile")
-            #if os(iOS)
-            .navigationBarTitleDisplayMode(.inline)
-            #endif
-            .navigationDestination(for: AzaRoute.self) { _ in AccountView() }
-            .toolbar {
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("Done", systemImage: "checkmark") { dismiss() }
-                        .accessibilityIdentifier("profile.done")
-                }
-            }
-        }
-    }
-}
-
-enum AzaRoute: Hashable { case account }
-
-/// The first row of Profile, like Apple Account in Settings: opens the account page, or signs in.
+/// The first row of the app's profile page, like Apple Account in Settings. Signed in, it opens the account page;
+/// signed out, it signs in. Place it inside the page's `NavigationStack`.
 public struct AccountRow: View {
-    @Environment(AzaAccount.self) private var account
+    @Environment(Account.self) private var account
     @Environment(\.accent) private var accent
 
     public init() {}
@@ -53,17 +11,17 @@ public struct AccountRow: View {
     public var body: some View {
         Group {
             if let profile = account.profile {
-                NavigationLink(value: AzaRoute.account) {
-                    row(title: profile.name, subtitle: [profile.handle.map { "@\($0)" }, "aza account"].compactMap(\.self).joined(separator: " · ")) {
-                        ProfilePicture(profile, size: 56)
+                NavigationLink { AccountPage() } label: {
+                    row(profile.name, [profile.handle.map { "@\($0)" }, "aza account"].compactMap(\.self).joined(separator: " · ")) {
+                        ProfilePicture(profile: profile, size: 56)
                     }
                 }
             } else {
                 Button { withAnimation(.smooth) { account.signIn() } } label: {
-                    row(title: "Sign in with aza", subtitle: "Not signed in") {
-                        AzaMark()
-                            .foregroundStyle(accent)
-                            .frame(width: 34)
+                    row("Sign in with aza", "Not signed in") {
+                        AzaLogo()
+                            .fill(accent, style: FillStyle(eoFill: true))
+                            .frame(width: 34, height: 34)
                             .frame(width: 56, height: 56)
                             .background(Circle().fill(accent.opacity(0.15)))
                     }
@@ -73,12 +31,11 @@ public struct AccountRow: View {
         .buttonStyle(.plain)
         .padding(14)
         .glassEffect(.regular.interactive(), in: .rect(cornerRadius: 24))
-        .padding(.top, 8)
-        .accessibilityIdentifier("profile.account")
-        .sensoryFeedback(.success, trigger: account.signedIn) { _, signedIn in signedIn }
+        .accessibilityIdentifier("account")
+        .sensoryFeedback(.success, trigger: account.profile != nil) { _, signedIn in signedIn }
     }
 
-    private func row(title: String, subtitle: String, @ViewBuilder picture: () -> some View) -> some View {
+    private func row(_ title: String, _ subtitle: String, @ViewBuilder picture: () -> some View) -> some View {
         HStack(spacing: 14) {
             picture()
             VStack(alignment: .leading, spacing: 2) {
@@ -92,10 +49,10 @@ public struct AccountRow: View {
     }
 }
 
-/// Your aza account: who you're signed in as here, and signing out.
-struct AccountView: View {
-    @Environment(AzaAccount.self) private var account
-    @Environment(\.azaApp) private var app
+/// Who you're signed in as, and signing out.
+struct AccountPage: View {
+    @Environment(Account.self) private var account
+    @Environment(\.appInfo) private var app
     @Environment(\.dismiss) private var dismiss
     @State private var confirmSignOut = false
 
@@ -103,31 +60,36 @@ struct AccountView: View {
         ScrollView {
             VStack(spacing: 12) {
                 if let profile = account.profile {
-                    ProfilePicture(profile, size: 104).padding(.top, 12)
-                    Text(profile.name)
-                        .font(.system(size: 30, weight: .bold, design: .rounded))
+                    ProfilePicture(profile: profile, size: 104).padding(.top, 12)
+                    Text(profile.name).font(.system(size: 30, weight: .bold, design: .rounded))
                     if let handle = profile.handle {
                         HStack(spacing: 5) {
-                            AzaMark().frame(width: 14)
+                            AzaLogo().fill(.foreground, style: FillStyle(eoFill: true)).frame(width: 14, height: 14)
                             Text("@\(handle)")
                         }
                         .font(.subheadline.weight(.medium))
                         .foregroundStyle(.secondary)
                     }
                 }
-                Card {
-                    FormRow("Devices and apps") {
+                VStack(spacing: 0) {
+                    HStack {
+                        Text("Devices and apps").foregroundStyle(.secondary)
+                        Spacer()
                         Text("In the aza app").foregroundStyle(.tertiary)
                     }
+                    .frame(minHeight: 50)
+                    Divider().opacity(0.5)
                     Button(role: .destructive) { confirmSignOut = true } label: {
                         Text("Sign out of \(app.name)")
-                            .foregroundStyle(.red)
                             .frame(maxWidth: .infinity, minHeight: 50, alignment: .leading)
                             .contentShape(.rect)
                     }
                     .buttonStyle(.plain)
-                    .accessibilityIdentifier("aza.signOut")
+                    .foregroundStyle(.red)
+                    .accessibilityIdentifier("signOut")
                 }
+                .padding(.horizontal, 16)
+                .glassEffect(.regular, in: .rect(cornerRadius: 24))
                 .padding(.top, 12)
                 Text("Signing out keeps everything in \(app.name) on this device.")
                     .font(.footnote)
@@ -137,8 +99,7 @@ struct AccountView: View {
             }
             .padding(.horizontal, 20)
         }
-        .background(Backdrop())
-        .navigationTitle("aza account")
+        .navigationTitle("Account")
         #if os(iOS)
         .navigationBarTitleDisplayMode(.inline)
         #endif
@@ -155,21 +116,25 @@ struct AccountView: View {
 public struct AppearanceSection: View {
     @AppStorage(Appearance.key) private var appearance = Appearance.system
     @AppStorage(Accent.key) private var accent = Accent.standard
-    @Environment(\.azaApp) private var app
+    @Environment(\.appInfo) private var app
     @Namespace private var ring
 
     public init() {}
 
     public var body: some View {
-        Card {
-            FormRow("Theme") {
+        VStack(spacing: 0) {
+            HStack {
+                Text("Theme").foregroundStyle(.secondary)
+                Spacer()
                 Picker("Theme", selection: $appearance) {
                     ForEach(Appearance.allCases) { Text($0.title).tag($0) }
                 }
                 .pickerStyle(.segmented)
                 .frame(width: 220)
-                .accessibilityIdentifier("appearance.theme")
+                .accessibilityIdentifier("theme")
             }
+            .frame(minHeight: 50)
+            Divider().opacity(0.5)
             HStack(spacing: 0) {
                 ForEach(Accent.presets, id: \.self) { hex in
                     Button { withAnimation(.spring(duration: 0.4, bounce: 0.3)) { accent = hex } } label: {
@@ -185,7 +150,7 @@ public struct AppearanceSection: View {
                     }
                     .buttonStyle(.plain)
                     .frame(maxWidth: .infinity)
-                    .accessibilityLabel(Self.name(hex))
+                    .accessibilityLabel(Accent.name(hex))
                     .accessibilityAddTraits(accent == hex ? .isSelected : [])
                     .accessibilityIdentifier("accent.\(hex)")
                 }
@@ -196,24 +161,14 @@ public struct AppearanceSection: View {
             }
             .padding(.vertical, 12)
         }
+        .padding(.horizontal, 16)
+        .glassEffect(.regular, in: .rect(cornerRadius: 24))
         .sensoryFeedback(.selection, trigger: appearance)
         .sensoryFeedback(.selection, trigger: accent)
         .onAppear {
-            // AppStorage's default is fixed at compile time; the app's own default lives in AzaApp.
+            // The AppStorage defaults above are fixed; the app's own defaults come from `.azaUI(...)`.
             if UserDefaults.standard.string(forKey: Accent.key) == nil { accent = app.accent }
             if UserDefaults.standard.string(forKey: Appearance.key) == nil { appearance = app.appearance }
-        }
-    }
-
-    private static func name(_ hex: String) -> String {
-        switch hex {
-        case Accent.standard: "Black and white"
-        case "FF375F": "Pink"
-        case "FF9F0A": "Orange"
-        case "30D158": "Green"
-        case "0A84FF": "Blue"
-        case "5E5CE6": "Indigo"
-        default: "Colour"
         }
     }
 }

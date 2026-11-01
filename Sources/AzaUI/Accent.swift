@@ -14,6 +14,19 @@ public enum Accent {
         return 0.2126 * r + 0.7152 * g + 0.0722 * b > 0.55 ? .black : .white
     }
 
+    /// For VoiceOver.
+    static func name(_ hex: String) -> String {
+        switch hex {
+        case standard: "Black and white"
+        case "FF375F": "Pink"
+        case "FF9F0A": "Orange"
+        case "30D158": "Green"
+        case "0A84FF": "Blue"
+        case "5E5CE6": "Indigo"
+        default: "Custom"
+        }
+    }
+
     static func components(_ hex: String) -> (Double, Double, Double) {
         let v = UInt64(hex.trimmingCharacters(in: CharacterSet(charactersIn: "#")), radix: 16) ?? 0xFF375F
         return (Double((v >> 16) & 0xFF) / 255, Double((v >> 8) & 0xFF) / 255, Double(v & 0xFF) / 255)
@@ -48,7 +61,7 @@ public extension Color {
 }
 
 public extension EnvironmentValues {
-    /// The app's colour, set once at the root by `.aza(_:)`.
+    /// The app's colour, set at the root by `.azaUI(...)`.
     @Entry var accent: Color = .accentColor
     /// Text and symbols drawn on top of `accent`.
     @Entry var onAccent: Color = .white

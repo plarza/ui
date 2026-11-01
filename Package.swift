@@ -1,4 +1,4 @@
-// swift-tools-version: 6.2
+// swift-tools-version: 6.4
 import PackageDescription
 
 let settings: [SwiftSetting] = [
@@ -9,13 +9,14 @@ let settings: [SwiftSetting] = [
 
 let package = Package(
     name: "AzaUI",
-    platforms: [.iOS(.v26), .macOS(.v26)],
+    platforms: [.iOS(.v27), .macOS(.v27)],
     products: [
         .library(name: "AzaUI", targets: ["AzaUI"]),
         .library(name: "AzaUITesting", targets: ["AzaUITesting"]),
     ],
     targets: [
         .target(name: "AzaUI", swiftSettings: settings),
-        .target(name: "AzaUITesting", swiftSettings: settings),
+        // XCTestCase's methods are nonisolated, so the test helpers can't default to the main actor.
+        .target(name: "AzaUITesting", swiftSettings: [.swiftLanguageMode(.v5)]),
     ]
 )

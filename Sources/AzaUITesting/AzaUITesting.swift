@@ -1,6 +1,5 @@
 import XCTest
 
-/// Helpers for end-to-end UI tests on the Simulator.
 public extension XCTestCase {
     /// Checks every 0.1 s. XCTest's own waits check about once a second, which made every step cost a second.
     @discardableResult
@@ -13,7 +12,7 @@ public extension XCTestCase {
         return true
     }
 
-    /// Waits for `element` to exist and returns it, failing the test at the caller's line if it never does.
+    /// Waits for `element` and returns it, failing at the caller's line if it never appears.
     @discardableResult
     func wait(_ element: XCUIElement, _ timeout: TimeInterval = 6, file: StaticString = #filePath, line: UInt = #line) -> XCUIElement {
         XCTAssertTrue(poll(timeout) { element.exists }, "\(element) never appeared", file: file, line: line)
@@ -22,13 +21,16 @@ public extension XCTestCase {
 }
 
 public extension XCUIApplication {
-    /// Launch arguments that answer the aza sign-in screen as skipped.
-    static let skipSignIn = ["-aza.decided", "YES"]
+    /// Launches as on first launch: at the sign-in screen, signed out.
+    func launchAtSignIn() {
+        launchArguments += ["-signInAnswered", "NO", "-account", "none"]
+        launch()
+    }
 
-    /// Launches with the sign-in screen answered, and signed in to the sample profile if asked.
+    /// Launches with the sign-in screen skipped, or signed in to the sample profile.
     func launchPastSignIn(signedIn: Bool = false) {
-        launchArguments += Self.skipSignIn
-        if signedIn { launchEnvironment["AZA_SIGNED_IN"] = "1" }
+        launchArguments += ["-signInAnswered", "YES"]
+        if signedIn { launchEnvironment["SAMPLE_ACCOUNT"] = "1" }
         launch()
     }
 }

@@ -1,10 +1,10 @@
 import SwiftUI
 
 /// The aza mark: an @ around an "a", drawn to fit any square.
-nonisolated public struct AzaLogo: Shape {
-    public init() {}
+nonisolated struct AzaLogo: Shape {
+    init() {}
 
-    public func path(in rect: CGRect) -> Path {
+    func path(in rect: CGRect) -> Path {
         let side = min(rect.width, rect.height)
         let scale = side / 1000
         let origin = CGPoint(x: rect.midX - side / 2, y: rect.midY - side / 2)
