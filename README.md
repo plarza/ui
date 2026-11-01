@@ -13,7 +13,7 @@ Shared SwiftUI for Heavier, Stream and Timeline: the parts that must look and be
 | `Account`, `Profile` | Who's signed in: name, picture and handle (protocol section 6). |
 | `Accent`, `Appearance`, `Color(hex:)` | The stored colour and theme (`accent`, `appearance` keys). `Accent.standard` is black in light mode and white in dark. |
 | `\.accent`, `\.onAccent` | The app's colour and the colour that reads on it. |
-| `AzaUITesting` | `poll`, `wait`, `launchAtSignIn()` and `launchPastSignIn(signedIn:)` for UI tests. |
+| `UITestSupport` | `poll`, `wait`, `launchAtSignIn()` and `launchPastSignIn(signedIn:)` for UI tests. |
 
 Signing in is a stand-in until the aza app exists: it signs in as `Profile.sample`. The real flow asks the aza app for a `sign-in` certificate ([protocol](https://github.com/plarza/protocol), section 7).
 
@@ -32,7 +32,7 @@ targets:
   MyAppTests:
     dependencies:
       - package: AzaUI
-        product: AzaUITesting
+        product: UITestSupport
 ```
 
 ```swift
@@ -135,7 +135,7 @@ Liquid Glass:
 
 - Write end-to-end XCUITests on the Simulator only. They never touch the Mac's mouse or keyboard.
 - Launch once per run. A DEBUG-only `network-aza-<app>://reset` link returns to the first screen between tests.
-- Poll every 0.1 s (`AzaUITesting.poll`). XCTest's own waits check about once a second.
+- Poll every 0.1 s (`UITestSupport.poll`). XCTest's own waits check about once a second.
 - Tests find their data, for example a training day in whatever plan exists. Never assume it.
 - Environment variables open the app in any state, for screenshots: `<APP>_MOCK=1`, `<APP>_SHEET=profile`.
 - `scripts/test.sh` runs `build-for-testing` only when a source file is newer than the last build.
