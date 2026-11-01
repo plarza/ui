@@ -121,7 +121,7 @@ On iOS 27, iPhone apps resize (on iPad and in iPhone Mirroring), and supported o
 | `window.overrideUserInterfaceStyle` (AzaUI does this) | `preferredColorScheme` | It doesn't reach a sheet that's already open. |
 | `ScrollView` + `VStack` for cards that change height | `List` | `List` animates row heights on its own clock, so cards jump. |
 | Keep content laid out and reveal it with `frame(height: open ? nil : 0)` + `clipped()` | Inserting it with `if` | Opening animates as smoothly as closing. |
-| `.reorderable()` + `.reorderContainer(for:)` | A custom drag gesture | Works in any container on iOS 27 and is accessible. |
+| A drag handle with a vertical-only `DragGesture` and `accessibilityAdjustableAction` for a list of cards | `.reorderable()` | On iOS 27 its lifted preview shrinks, moves sideways with the finger and carries a square background. |
 | `.swipeActionsContainer()` on a `ScrollView` | Rebuilding as a `List` for swipes | |
 | `.alert(_:item:)`, `.confirmationDialog(_:item:)` | A `Bool` plus a separate value | |
 | `.onGeometryChange` | `GeometryReader` | Measures without changing layout. |
