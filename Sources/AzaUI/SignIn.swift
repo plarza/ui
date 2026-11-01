@@ -50,6 +50,7 @@ struct SignInScreen: View {
 }
 
 /// A profile picture, or initials on the app's colour when there isn't one or it hasn't loaded.
+/// The sample account is a grey person, so it never passes for a real one.
 struct ProfilePicture: View {
     let profile: Profile?
     let size: CGFloat
@@ -57,6 +58,19 @@ struct ProfilePicture: View {
     @Environment(\.onAccent) private var onAccent
 
     var body: some View {
+        if profile?.isSample == true {
+            Image(systemName: "person.fill")
+                .font(.system(size: size * 0.45, weight: .semibold))
+                .foregroundStyle(.secondary)
+                .frame(width: size, height: size)
+                .background(Circle().fill(.quaternary))
+                .accessibilityHidden(true)
+        } else {
+            picture
+        }
+    }
+
+    private var picture: some View {
         AsyncImage(url: profile?.picture, transaction: Transaction(animation: .smooth)) { phase in
             if let image = phase.image {
                 image.resizable().scaledToFill()

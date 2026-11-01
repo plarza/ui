@@ -16,8 +16,11 @@ public struct Profile: Codable, Equatable, Sendable {
         self.handle = handle
     }
 
-    /// Stands in for a real identity until the aza app can approve sign-ins.
-    public static let sample = Profile(name: "aiden", picture: URL(string: "https://github.com/s1dny.png"), handle: "sidny.me")
+    /// Stands in for a real identity until the aza app can approve sign-ins. Plainly not a real account.
+    public static let sample = Profile(name: "Sample account")
+
+    /// The stand-in, shown with a grey picture and a Preview label.
+    public var isSample: Bool { self == .sample }
 
     /// Up to two initials, for when there's no picture.
     var initials: String {
@@ -51,7 +54,8 @@ public final class Account {
             return
         }
         let saved = defaults.data(forKey: Self.profileKey).flatMap { try? JSONDecoder().decode(Profile.self, from: $0) }
-        profile = saved
+        // Every saved profile is a stand-in until real sign-in exists; earlier builds saved one that looked real.
+        profile = saved == nil ? nil : .sample
         answered = defaults.bool(forKey: Self.answeredKey) || saved != nil
     }
 

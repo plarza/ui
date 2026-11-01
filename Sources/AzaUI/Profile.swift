@@ -12,7 +12,8 @@ public struct AccountRow: View {
         Group {
             if let profile = account.profile {
                 NavigationLink { AccountPage() } label: {
-                    row(profile.name, [profile.handle.map { "@\($0)" }, "aza account"].compactMap(\.self).joined(separator: " · ")) {
+                    row(profile.name, profile.isSample ? "Preview · not a real account"
+                        : [profile.handle.map { "@\($0)" }, "aza account"].compactMap(\.self).joined(separator: " · ")) {
                         ProfilePicture(profile: profile, size: 56)
                     }
                 }
@@ -62,6 +63,15 @@ struct AccountPage: View {
                 if let profile = account.profile {
                     ProfilePicture(profile: profile, size: 104).padding(.top, 12)
                     Text(profile.name).font(.system(size: 30, weight: .bold, design: .rounded))
+                    if profile.isSample {
+                        Text("Preview")
+                            .font(.footnote.weight(.semibold))
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 4)
+                            .background(Capsule().fill(.quaternary))
+                            .foregroundStyle(.secondary)
+                            .accessibilityIdentifier("preview")
+                    }
                     if let handle = profile.handle {
                         HStack(spacing: 5) {
                             AzaLogo().fill(.foreground, style: FillStyle(eoFill: true)).frame(width: 14, height: 14)
@@ -91,7 +101,9 @@ struct AccountPage: View {
                 .padding(.horizontal, 16)
                 .glassEffect(.regular, in: .rect(cornerRadius: 24))
                 .padding(.top, 12)
-                Text("Signing out keeps everything in \(app.name) on this device.")
+                Text(account.profile?.isSample == true
+                     ? "Signing in with aza isn't built yet, so this is a stand-in account. Signing out keeps everything in \(app.name) on this device."
+                     : "Signing out keeps everything in \(app.name) on this device.")
                     .font(.footnote)
                     .foregroundStyle(.secondary)
                     .frame(maxWidth: .infinity, alignment: .leading)

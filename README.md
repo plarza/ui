@@ -15,7 +15,7 @@ Shared SwiftUI for Heavier, Stream and Timeline: the parts that must look and be
 | `\.accent`, `\.onAccent` | The app's colour and the colour that reads on it. |
 | `UITestSupport` | `poll`, `wait`, `launchAtSignIn()` and `launchPastSignIn(signedIn:)` for UI tests. |
 
-Signing in is a stand-in until the aza app exists: it signs in as `Profile.sample`. The real flow asks the aza app for a `sign-in` certificate ([protocol](https://github.com/plarza/protocol), section 7).
+Signing in is a stand-in until the aza app exists: it signs in as `Profile.sample`, shown as “Sample account” with a grey picture and a Preview label. Profiles saved by earlier builds are replaced by it. The real flow asks the aza app for a `sign-in` certificate ([protocol](https://github.com/plarza/protocol), section 7).
 
 ## Use
 
