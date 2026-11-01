@@ -73,7 +73,7 @@ Only what isn't obvious. Each rule comes from one of the apps or from the iOS 27
 | Bundle ID | `network.aza.<app>` |
 | URL scheme | `network-aza-<app>` |
 | Team | `H5A6B4L9W8` |
-| Minimum | iOS 27, macOS 27 |
+| Minimum | iOS 27, macOS 26 |
 | Project | XcodeGen `project.yml`; the `.xcodeproj` is gitignored |
 
 ### Info.plist
