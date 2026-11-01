@@ -20,20 +20,23 @@ public extension View {
     ///   - icon: An image set with the app icon, for the sign-in screen.
     ///   - accent: The colour until one is picked, as hex.
     ///   - appearance: The theme until one is picked.
+    ///   - showsSignIn: False for a scene other than the main window, such as Settings or a menu bar extra.
     func azaUI(name: String, icon: String = "Icon", accent: String = Accent.standard,
-               appearance: Appearance = .system) -> some View {
-        modifier(Root(info: AppInfo(name: name, icon: icon, accent: accent, appearance: appearance)))
+               appearance: Appearance = .system, showsSignIn: Bool = true) -> some View {
+        modifier(Root(info: AppInfo(name: name, icon: icon, accent: accent, appearance: appearance), showsSignIn: showsSignIn))
     }
 }
 
 private struct Root: ViewModifier {
     let info: AppInfo
+    let showsSignIn: Bool
     @State private var account = Account.shared
     @AppStorage private var accent: String
     @AppStorage private var appearance: Appearance
 
-    init(info: AppInfo) {
+    init(info: AppInfo, showsSignIn: Bool) {
         self.info = info
+        self.showsSignIn = showsSignIn
         _accent = AppStorage(wrappedValue: info.accent, Accent.key)
         _appearance = AppStorage(wrappedValue: info.appearance, Appearance.key)
     }
@@ -43,9 +46,9 @@ private struct Root: ViewModifier {
             .modifier(Shared(info: info, accent: accent, account: account))
             .onChange(of: appearance, initial: true) { appearance.apply() }
             #if os(iOS)
-            .fullScreenCover(isPresented: .constant(!account.answered)) { cover }
+            .fullScreenCover(isPresented: .constant(showsSignIn && !account.answered)) { cover }
             #else
-            .sheet(isPresented: .constant(!account.answered)) { cover }
+            .sheet(isPresented: .constant(showsSignIn && !account.answered)) { cover }
             #endif
     }
 

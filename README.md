@@ -6,7 +6,7 @@ Shared SwiftUI for Heavier, Stream and Timeline: the parts that must look and be
 
 | | |
 |---|---|
-| `.azaUI(name:icon:accent:appearance:)` | On the window's root view. Applies the theme and colour, provides `Account.shared`, and shows the sign-in screen on first launch. |
+| `.azaUI(name:icon:accent:appearance:showsSignIn:)` | On the window's root view. Applies the theme and colour, provides `Account.shared`, and shows the sign-in screen on first launch. |
 | `ProfileButton` | Top right of the main screen. Your picture in a glass ring when signed in, a glass person button when not. |
 | `AccountRow` | First row of the app's profile page. Opens the account page (picture, @handle, sign out), or signs in. |
 | `AppearanceSection` | Theme (System, Light, Dark) and colour (presets plus a custom picker). |
@@ -96,6 +96,8 @@ On iOS 27, iPhone apps resize (on iPad and in iPhone Mirroring), and supported o
 ### Concurrency
 
 - `nonisolated async` functions run on the caller's actor. Mark work that must leave the main actor `@concurrent`.
+- Closures that a framework calls on its own thread trap if they were made on the main actor. Examples: dynamic colours (`UIColor { traits in … }`), `MPMediaItemArtwork`'s image closure, `AVAudioSourceNode`'s render block. Build them in a `nonisolated` function or type.
+- Generated bindings (UniFFI) go in their own target with `SWIFT_DEFAULT_ACTOR_ISOLATION: nonisolated`, or every call into the core becomes main-actor code.
 - SwiftData `@Model` types are nonisolated, so anything they call (`oneRepMax`, `Catalog`) must be `nonisolated` too.
 - Non-`Sendable` system objects such as `Activity` can't be captured into a `Task`. Keep the ID, and look the object up inside a `@concurrent` function.
 - If iOS can relaunch the app in the background (location, audio), build the model in the app delegate's `didFinishLaunching`. No scene connects on a background relaunch.
@@ -123,6 +125,7 @@ On iOS 27, iPhone apps resize (on iPad and in iPhone Mirroring), and supported o
 | `.swipeActionsContainer()` on a `ScrollView` | Rebuilding as a `List` for swipes | |
 | `.alert(_:item:)`, `.confirmationDialog(_:item:)` | A `Bool` plus a separate value | |
 | `.onGeometryChange` | `GeometryReader` | Measures without changing layout. |
+| Show an always-on sheet only once `Account.answered` is true | `.sheet(isPresented: .constant(true))` | The first-launch sign-in screen can't present over a sheet. |
 | `AsyncImage` | Your own image cache | It follows HTTP caching on iOS 27. Use `.asyncImageURLSession` for a custom session. |
 
 Liquid Glass:

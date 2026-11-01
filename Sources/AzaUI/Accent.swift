@@ -1,7 +1,7 @@
 import SwiftUI
 
 /// The app's colour, stored as six hex digits under the `accent` key.
-public enum Accent {
+nonisolated public enum Accent {
     /// White in dark mode and black in light mode, so it always stands out from the background.
     public static let standard = "FFFFFF"
     public static let presets = [standard, "FF375F", "FF9F0A", "30D158", "0A84FF", "5E5CE6"]
@@ -33,7 +33,7 @@ public enum Accent {
     }
 }
 
-public extension Color {
+nonisolated public extension Color {
     /// `Accent.standard` is black or white with the appearance; anything else is that exact colour.
     init(hex: String) {
         if hex == Accent.standard {

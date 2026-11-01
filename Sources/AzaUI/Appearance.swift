@@ -1,7 +1,7 @@
 import SwiftUI
 
 /// Light, dark, or whatever the system is set to. Stored under the `appearance` key.
-public enum Appearance: String, CaseIterable, Identifiable, Sendable {
+nonisolated public enum Appearance: String, CaseIterable, Identifiable, Sendable {
     case system, light, dark
 
     public static let key = "appearance"
@@ -9,7 +9,7 @@ public enum Appearance: String, CaseIterable, Identifiable, Sendable {
     public var title: String { rawValue.capitalized }
 
     /// Set on every window rather than with `preferredColorScheme`, which doesn't reach a sheet that's already open.
-    func apply() {
+    @MainActor func apply() {
         #if os(iOS)
         let style: UIUserInterfaceStyle = switch self {
         case .system: .unspecified
