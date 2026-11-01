@@ -9,7 +9,7 @@ let settings: [SwiftSetting] = [
 
 let package = Package(
     name: "AzaUI",
-    platforms: [.iOS(.v27), .macOS(.v26)],
+    platforms: [.iOS(.v27), .macOS(.v27)],
     products: [
         .library(name: "AzaUI", targets: ["AzaUI"]),
         .library(name: "UITestSupport", targets: ["UITestSupport"]),
