@@ -14,6 +14,8 @@ Shared SwiftUI for Heavier, Stream and Timeline: the parts that must look and be
 | `Accent`, `Appearance`, `Color(hex:)` | The stored colour and theme (`accent`, `appearance` keys). `Accent.standard` is black in light mode and white in dark. |
 | `\.accent`, `\.onAccent` | The app's colour and the colour that reads on it. |
 | `ChromeLogo` | The aza mark (or any logo) as polished chrome you can spin. See [Chrome logo](#chrome-logo). |
+| `Chat.Transcript`, `Chat.Composer`, `Chat.Reply`, `Chat.Markdown` | A chat with an AI, streamed. See [Chat](#chat). |
+| `ServerSentEvents` | Reads a `text/event-stream` and picks it back up after a dropped connection. |
 | `UITestSupport` | `poll`, `wait`, `launchAtSignIn()` and `launchPastSignIn(signedIn:)` for UI tests. |
 
 Signing in asks the aza app for a certificate (protocol section 7). AzaUI opens `aza:approve#req=…`; the aza app shows what the app asks for and, once approved, opens `https://<app ID>/aza#aza=…`. That's a universal link back to the app, so only the real app can receive it. AzaUI then uploads the certificate and loads the profile. The client's keys and certificate stay in the Keychain, for this device only. Without the aza app, signing in says to get it.
@@ -72,6 +74,38 @@ To build against a local AzaKit rather than the released one, run `scripts/build
 | `profile` | Profile button |
 | `account`, `signOut` | Account row, sign out on the account page |
 | `theme`, `accent.<HEX>` | Appearance controls |
+
+## Chat
+
+A chat with an AI that answers in streamed markdown, as in Coach's chat with Jarvis.
+
+```swift
+Chat.Transcript(messages: messages, reply: reply, retry: resend) {
+    Text("Tell Jarvis what you're training for.")
+}
+.safeAreaInset(edge: .bottom) {
+    Chat.Composer(text: $draft, answering: reply != nil, send: send, stop: stop)
+}
+```
+
+| | |
+|---|---|
+| `Chat.Message` | One message: yours or the assistant's, with an optional label (“After your run”), and `sending` or `failed` for yours, which shows a retry. |
+| `Chat.Reply` | The answer as it streams: `append`, `restart` (what came before was thinking aloud), `doing` (“Reading your runs”), `end`. Text arrives in bursts; it's shown at an even pace a fraction of a second behind. `settle()` waits until it's all shown, so the stored message can replace it without a jump. |
+| `Chat.Transcript` | Your messages in bubbles, the assistant's as full-width markdown, a date over each day. It follows new text only while you're at the bottom; scrolled up, it stays put and shows a button back down. Sending always brings you back. |
+| `Chat.Composer` | Grows to six lines. While the assistant answers, send turns into stop and you can keep writing. Return sends from a hardware keyboard, Shift-Return starts a line. Keep its text in `@AppStorage` so a draft outlives the app. |
+| `Chat.Markdown` | Paragraphs, headings, lists, quotes, code with a copy button, tables and rules. Each block is its own view, so while streaming only the last one redraws; an unfinished `**`, `` ` `` or link at the end is closed or held back rather than shown raw. |
+| `ServerSentEvents.follow` | Reads a stream and, when the connection drops, asks again with the last event ID until the server sends the last event or 204. |
+
+A chat that holds up needs the server to:
+
+- Write the answer on its own task, not the request's, so it carries on when the app closes or loses signal.
+- Keep the answer's events and give each an ID, so a phone that comes back with `Last-Event-ID` gets what it missed, then the rest live. Coach does this on every return to the front.
+- Take the phone's ID for each message, so it shows at once and never twice once the chat syncs.
+- Stop on request, keeping what was said.
+- Notify when an answer ends with nobody watching.
+
+Jarvis's `/v1/chat` is the model.
 
 ## Chrome logo
 
