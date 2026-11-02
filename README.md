@@ -1,6 +1,6 @@
 # AzaUI
 
-Shared SwiftUI for Heavier, Stream and Timeline: the parts that must look and behave the same in every app. Anything else, apps write with SwiftUI directly.
+Shared SwiftUI for Coach, Stream and Timeline: the parts that must look and behave the same in every app. Anything else, apps write with SwiftUI directly.
 
 ## Contents
 
@@ -22,7 +22,7 @@ Signing in asks the aza app for a certificate (protocol section 7). AzaUI opens 
 
 The app needs:
 
-- An app ID: a domain the app's team controls, such as `heavier.aza.network`.
+- An app ID: a domain the app's team controls, such as `coach.aza.network`.
 - `/.well-known/apple-app-site-association` on that domain, listing the app for `/aza`.
 - The Associated Domains entitlement `applinks:<app ID>`.
 
@@ -199,7 +199,7 @@ On iOS 27, iPhone apps resize (on iPad and in iPhone Mirroring), and supported o
 
 | Data | Store |
 |---|---|
-| Records you edit | SwiftData (Heavier) |
+| Records you edit | SwiftData (Coach) |
 | High-rate append-only samples | One file per day, rebuilt on read (Timeline) |
 | Heavy or shared with the Mac | Rust core over UniFFI (Stream) |
 | Preferences | `@AppStorage`. The `appearance`, `accent`, `account` and `signInAnswered` keys belong to AzaUI. |
