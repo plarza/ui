@@ -6,6 +6,7 @@ struct SignInScreen: View {
     @Environment(\.appInfo) private var app
     @Environment(\.accent) private var accent
     @Environment(\.onAccent) private var onAccent
+    @Environment(\.openURL) private var openURL
 
     var body: some View {
         VStack(spacing: 0) {
@@ -22,12 +23,16 @@ struct SignInScreen: View {
                 .padding(.top, 20)
             Spacer()
             Spacer()
-            Button { withAnimation(.smooth) { account.signIn() } } label: {
+            Button { Task { await account.signIn(open: openURL) } } label: {
                 HStack(spacing: 10) {
-                    AzaLogo()
-                        .fill(.foreground, style: FillStyle(eoFill: true))
-                        .frame(width: 26, height: 26)
-                    Text("Sign in with aza")
+                    if account.waiting {
+                        ProgressView().tint(onAccent)
+                    } else {
+                        AzaLogo()
+                            .fill(.foreground, style: FillStyle(eoFill: true))
+                            .frame(width: 26, height: 26)
+                    }
+                    Text(account.waiting ? "Waiting for aza" : "Sign in with aza")
                 }
                 .font(.title2.weight(.semibold))
                 .frame(maxWidth: .infinity, minHeight: 50)
@@ -46,6 +51,29 @@ struct SignInScreen: View {
         .padding(.horizontal, 20)
         .padding(.bottom, 8)
         .interactiveDismissDisabled()
+        .signInProblems()
+    }
+}
+
+extension View {
+    /// Shows why signing in failed.
+    func signInProblems() -> some View {
+        modifier(SignInProblems())
+    }
+}
+
+private struct SignInProblems: ViewModifier {
+    @Environment(Account.self) private var account
+
+    func body(content: Content) -> some View {
+        content.alert(account.problem?.title ?? "", isPresented: Binding(
+            get: { account.problem != nil },
+            set: { if !$0 { account.problem = nil } }
+        )) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text(account.problem?.message ?? "")
+        }
     }
 }
 

@@ -6,17 +6,25 @@ Shared SwiftUI for Heavier, Stream and Timeline: the parts that must look and be
 
 | | |
 |---|---|
-| `.azaUI(name:icon:accent:appearance:showsSignIn:)` | On the window's root view. Applies the theme and colour, provides `Account.shared`, and shows the sign-in screen on first launch. |
+| `.azaUI(name:icon:accent:appearance:appID:scopes:showsSignIn:)` | On the window's root view. Applies the theme and colour, provides `Account.shared`, shows the sign-in screen on first launch, and takes the aza app's answer when it opens the app. |
 | `ProfileButton` | Top right of the main screen. Your picture in a glass ring when signed in, a glass person button when not. |
 | `AccountRow` | First row of the app's profile page. Opens the account page (picture, @handle, sign out), or signs in. |
 | `AppearanceSection` | Theme (System, Light, Dark) and colour (presets plus a custom picker). |
-| `Account`, `Profile` | Who's signed in: name, picture and handle (protocol section 6). |
+| `Account`, `Profile` | Who's signed in: name, picture and handle (protocol section 6), and `Account.client`, the app's [AzaKit](https://github.com/plarza/protocol) client for sync data and server sign-ins. |
 | `Accent`, `Appearance`, `Color(hex:)` | The stored colour and theme (`accent`, `appearance` keys). `Accent.standard` is black in light mode and white in dark. |
 | `\.accent`, `\.onAccent` | The app's colour and the colour that reads on it. |
 | `ChromeLogo` | The aza mark (or any logo) as polished chrome you can spin. See [Chrome logo](#chrome-logo). |
 | `UITestSupport` | `poll`, `wait`, `launchAtSignIn()` and `launchPastSignIn(signedIn:)` for UI tests. |
 
-Signing in is a stand-in until the aza app exists: it signs in as `Profile.sample`, shown as “Sample account” with a grey picture and a Preview label. Profiles saved by earlier builds are replaced by it. The real flow asks the aza app for a `sign-in` certificate ([protocol](https://github.com/plarza/protocol), section 7).
+Signing in asks the aza app for a certificate (protocol section 7). AzaUI opens `aza:approve#req=…`; the aza app shows what the app asks for and, once approved, opens `https://<app ID>/aza#aza=…`. That's a universal link back to the app, so only the real app can receive it. AzaUI then uploads the certificate and loads the profile. The client's keys and certificate stay in the Keychain, for this device only. Without the aza app, signing in says to get it.
+
+The app needs:
+
+- An app ID: a domain the app's team controls, such as `heavier.aza.network`.
+- `/.well-known/apple-app-site-association` on that domain, listing the app for `/aza`.
+- The Associated Domains entitlement `applinks:<app ID>`.
+
+An app with no `appID:` signs in as `Profile.sample`, shown as “Sample account” with a grey picture and a Preview label.
 
 ## Use
 
@@ -38,7 +46,7 @@ targets:
 
 ```swift
 WindowGroup {
-    RootView().azaUI(name: "Timeline", accent: "0A84FF")
+    RootView().azaUI(name: "Timeline", accent: "0A84FF", appID: "timeline.aza.network")
 }
 
 // Main screen
@@ -55,6 +63,8 @@ NavigationStack {
 ```
 
 The sign-in screen shows the image set named `Icon` (a copy of the app icon) unless `icon:` names another.
+
+To build against a local AzaKit rather than the released one, run `scripts/build-swift.sh` in the protocol repository and set `AZA_PROTOCOL_PATH=<protocol>`.
 
 | Identifier | Element |
 |---|---|

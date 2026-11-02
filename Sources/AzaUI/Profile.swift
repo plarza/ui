@@ -5,6 +5,7 @@ import SwiftUI
 public struct AccountRow: View {
     @Environment(Account.self) private var account
     @Environment(\.accent) private var accent
+    @Environment(\.openURL) private var openURL
 
     public init() {}
 
@@ -18,8 +19,8 @@ public struct AccountRow: View {
                     }
                 }
             } else {
-                Button { withAnimation(.smooth) { account.signIn() } } label: {
-                    row("Sign in with aza", "Not signed in") {
+                Button { Task { await account.signIn(open: openURL) } } label: {
+                    row("Sign in with aza", account.waiting ? "Waiting for the aza app" : "Not signed in") {
                         AzaLogo()
                             .fill(accent, style: FillStyle(eoFill: true))
                             .frame(width: 34, height: 34)
@@ -34,6 +35,7 @@ public struct AccountRow: View {
         .glassEffect(.regular.interactive(), in: .rect(cornerRadius: 24))
         .accessibilityIdentifier("account")
         .sensoryFeedback(.success, trigger: account.profile != nil) { _, signedIn in signedIn }
+        .signInProblems()
     }
 
     private func row(_ title: String, _ subtitle: String, @ViewBuilder picture: () -> some View) -> some View {
@@ -102,8 +104,8 @@ struct AccountPage: View {
                 .glassEffect(.regular, in: .rect(cornerRadius: 24))
                 .padding(.top, 12)
                 Text(account.profile?.isSample == true
-                     ? "Signing in with aza isn't built yet, so this is a stand-in account. Signing out keeps everything in \(app.name) on this device."
-                     : "Signing out keeps everything in \(app.name) on this device.")
+                     ? "\(app.name) doesn't sign in with aza yet, so this is a stand-in account. Signing out keeps everything in \(app.name) on this device."
+                     : "Signing out keeps everything in \(app.name) on this device. To stop \(app.name) using your account for good, remove it in the aza app.")
                     .font(.footnote)
                     .foregroundStyle(.secondary)
                     .frame(maxWidth: .infinity, alignment: .leading)

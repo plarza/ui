@@ -5,6 +5,8 @@ struct AppInfo {
     var icon = "Icon"
     var accent = Accent.standard
     var appearance = Appearance.system
+    var appID: String?
+    var scopes = ["sign-in"]
 }
 
 extension EnvironmentValues {
@@ -20,10 +22,15 @@ public extension View {
     ///   - icon: An image set with the app icon, for the sign-in screen.
     ///   - accent: The colour until one is picked, as hex.
     ///   - appearance: The theme until one is picked.
+    ///   - appID: The app's aza app ID, a domain whose universal links open this app at `/aza`. Without one,
+    ///     signing in signs in as the sample account.
+    ///   - scopes: What the app asks the aza app for: `sign-in`, and `read` and `write` for sync data.
     ///   - showsSignIn: False for a scene other than the main window, such as Settings or a menu bar extra.
     func azaUI(name: String, icon: String = "Icon", accent: String = Accent.standard,
-               appearance: Appearance = .system, showsSignIn: Bool = true) -> some View {
-        modifier(Root(info: AppInfo(name: name, icon: icon, accent: accent, appearance: appearance), showsSignIn: showsSignIn))
+               appearance: Appearance = .system, appID: String? = nil, scopes: [String] = ["sign-in"],
+               showsSignIn: Bool = true) -> some View {
+        modifier(Root(info: AppInfo(name: name, icon: icon, accent: accent, appearance: appearance,
+                                    appID: appID, scopes: scopes), showsSignIn: showsSignIn))
     }
 }
 
@@ -39,12 +46,15 @@ private struct Root: ViewModifier {
         self.showsSignIn = showsSignIn
         _accent = AppStorage(wrappedValue: info.accent, Accent.key)
         _appearance = AppStorage(wrappedValue: info.appearance, Appearance.key)
+        // Before anything shows, so a cold launch from the aza app's answer finds it configured.
+        Account.shared.configure(appID: info.appID, scopes: info.scopes)
     }
 
     func body(content: Content) -> some View {
         content
             .modifier(Shared(info: info, accent: accent, account: account))
             .onChange(of: appearance, initial: true) { appearance.apply() }
+            .onOpenURL { url in if showsSignIn { account.receive(url) } }
             #if os(iOS)
             .fullScreenCover(isPresented: .constant(showsSignIn && !account.answered)) { cover }
             #else
