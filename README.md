@@ -14,7 +14,7 @@ Shared SwiftUI for Coach, Stream and Timeline: the parts that must look and beha
 | `Accent`, `Appearance`, `Color(hex:)` | The stored colour and theme (`accent`, `appearance` keys). `Accent.standard` is black in light mode and white in dark. |
 | `\.accent`, `\.onAccent` | The app's colour and the colour that reads on it. |
 | `ChromeLogo` | The aza mark (or any logo) as polished chrome you can spin. See [Chrome logo](#chrome-logo). |
-| `Chat.Transcript`, `Chat.Composer`, `Chat.Reply`, `Chat.Markdown`, `Chat.Step` | A chat with an AI, streamed, with the steps it took. See [Chat](#chat). |
+| `Chat.Transcript`, `Chat.Composer`, `Chat.Turn`, `Chat.Markdown`, `Chat.Part` | A chat with an AI, streamed, with what it thought and did on the way. See [Chat](#chat). |
 | `ServerSentEvents` | Reads a `text/event-stream` and picks it back up after a dropped connection. |
 | `UITestSupport` | `poll`, `wait`, `launchAtSignIn()` and `launchPastSignIn(signedIn:)` for UI tests. |
 
@@ -80,19 +80,19 @@ To build against a local AzaKit rather than the released one, run `scripts/build
 A chat with an AI that answers in streamed markdown, as in Coach's chat with Jarvis.
 
 ```swift
-Chat.Transcript(messages: messages, reply: reply, retry: resend) {
+Chat.Transcript(messages: messages, turn: turn, retry: resend) {
     Text("Tell Jarvis what you're training for.")
 }
 .safeAreaInset(edge: .bottom) {
-    Chat.Composer(text: $draft, answering: reply != nil, send: send, stop: stop)
+    Chat.Composer(text: $draft, answering: turn != nil, send: send, stop: stop)
 }
 ```
 
 | | |
 |---|---|
-| `Chat.Message` | One message: yours or the assistant's, with an optional label (“After your run”), and `sending` or `failed` for yours, which shows a retry. An assistant message's `steps` and `worked` fold into one line above it (“Worked for 14s · 5 steps”); tap it to see them. |
-| `Chat.Reply` | The answer as it streams, and the steps on the way: `think` and `thinking` (a thought, as it's written), `use` (a tool, like “Looking at COROS”) and `detail` (what it looked at), `append`, `restart` (what came before was thinking aloud; it becomes a thought), `end`. The steps show on a line, the one under way shimmering, until the message takes the reply's place with them folded away. Text arrives in bursts; it's shown at an even pace a fraction of a second behind. `settle()` waits until it's all shown, so the stored message can replace it without a jump. |
-| `Chat.Transcript` | Your messages in bubbles, the assistant's as full-width markdown, a date over each day. It follows new text only while you're at the bottom; scrolled up, it stays put and shows a button back down. Sending always brings you back. |
+| `Chat.Message` | One message: yours or the assistant's, with an optional label (“After your run”), and `sending` or `failed` for yours, which shows a retry. An assistant message is its `parts` in order (`thought`, `tool` with its `detail`, `text`) and how long it `worked`; all but the answer, the last text, fold into one line above it (“Worked for 14s · 5 steps”) that opens them in order. |
+| `Chat.Turn` | The assistant's turn as it streams, with the ID it'll be stored under and when it started: `think` and `thinking`, `use` and `detail`, `say` and `write`, then `end`. Each adds to the last part or starts a new one, so nothing shown is ever taken back. Every part shows in order under “Working · 12s”, the current one shimmering; text is let out at an even pace a fraction of a second behind. `settle()` waits until it's all shown; then put the stored message in `messages` and drop the turn, and it takes the turn's place without anything moving. |
+| `Chat.Transcript` | Your messages in bubbles, the assistant's turns full width, a date over each day, and the turn being written at the end. It follows new text only while you're at the bottom; scrolled up, it stays put and shows a button back down. Sending always brings you back. |
 | `Chat.Composer` | Grows to six lines. While the assistant answers, send turns into stop and you can keep writing. Return sends from a hardware keyboard, Shift-Return starts a line. Keep its text in `@AppStorage` so a draft outlives the app. |
 | `Chat.Markdown` | Paragraphs, headings, lists, quotes, code with a copy button, tables and rules. Each block is its own view, so while streaming only the last one redraws; an unfinished `**`, `` ` `` or link at the end is closed or held back rather than shown raw. |
 | `ServerSentEvents.follow` | Reads a stream and, when the connection drops, asks again with the last event ID until the server sends the last event or 204. |
