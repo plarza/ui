@@ -6,3 +6,4 @@ DerivedData/
 node_modules/
 .svelte-check/
 .DS_Store
+Package.resolved
