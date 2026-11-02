@@ -3,3 +3,6 @@
 build/
 *.xcodeproj/xcuserdata/
 DerivedData/
+node_modules/
+.svelte-check/
+.DS_Store

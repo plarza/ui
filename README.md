@@ -13,6 +13,7 @@ Shared SwiftUI for Heavier, Stream and Timeline: the parts that must look and be
 | `Account`, `Profile` | Who's signed in: name, picture and handle (protocol section 6). |
 | `Accent`, `Appearance`, `Color(hex:)` | The stored colour and theme (`accent`, `appearance` keys). `Accent.standard` is black in light mode and white in dark. |
 | `\.accent`, `\.onAccent` | The app's colour and the colour that reads on it. |
+| `ChromeLogo` | The aza mark (or any logo) as polished chrome you can spin. See [Chrome logo](#chrome-logo). |
 | `UITestSupport` | `poll`, `wait`, `launchAtSignIn()` and `launchPastSignIn(signedIn:)` for UI tests. |
 
 Signing in is a stand-in until the aza app exists: it signs in as `Profile.sample`, shown as “Sample account” with a grey picture and a Preview label. Profiles saved by earlier builds are replaced by it. The real flow asks the aza app for a `sign-in` certificate ([protocol](https://github.com/plarza/protocol), section 7).
@@ -61,6 +62,54 @@ The sign-in screen shows the image set named `Icon` (a copy of the app icon) unl
 | `profile` | Profile button |
 | `account`, `signOut` | Account row, sign out on the account page |
 | `theme`, `accent.<HEX>` | Appearance controls |
+
+## Chrome logo
+
+Any SVG as a chrome object: a rounded rim, a bevel and a flat face, lit by a studio. It comes as a SwiftUI view, a Svelte component, and a CLI that renders stills and videos. Drag it and it keeps turning, then settles; it leans toward the pointer, and on phones with the phone.
+
+```swift
+ChromeLogo()                                  // the aza mark
+ChromeLogo(studio: .kominka)                  // another studio
+ChromeLogo(layout: url, settings: settings)   // another logo, from the CLI's .chromelayout
+```
+
+```svelte
+<script>
+  import { ChromeLogo } from '@aza/ui';
+</script>
+
+<ChromeLogo />                                <!-- the aza mark -->
+<ChromeLogo svg={markup} studio="kominka" settings={{ depth: 0.08 }} />
+```
+
+The Svelte package installs from git (`"@aza/ui": "github:plarza/ui"`) and needs Vite, which loads each studio only when a logo uses it.
+
+Every setting (shape, material, light, view, motion) is listed with its range in `web/chrome/settings.ts` and by `bun web/cli.ts --help`. The Svelte `settings` prop, the CLI's flags and `ChromeSettings` in Swift take the same values.
+
+```sh
+bun web/cli.ts logo.svg              # everything, into the current folder
+bun web/cli.ts logo.svg --only png,video --size 2160 --motion spin --depth=0.08
+```
+
+| Output | |
+|---|---|
+| `logo.png` | Still with transparency |
+| `logo.mp4` | H.264 on black, plays anywhere |
+| `logo.webm` | VP9 with transparency, for Chrome and Firefox |
+| `logo-hevc.mov` | HEVC with transparency, for Safari and Apple apps |
+| `logo-prores.mov` | ProRes 4444 with transparency, for editing |
+| `logo.glb` | The mesh, for Blender and other 3D tools |
+| `logo.chromelayout` | What `ChromeLogo(layout:)` reads |
+
+Videos loop seamlessly: `--motion sway` (default) rocks it, `spin` turns it all the way round.
+
+How it works: three.js's SVG parser and Clipper2 turn the SVG into clean outlines (fill rules applied, strokes widened). Rings are offset inward from the outline and triangulated with Delaunator and Constrainautor; every point keeps its distance from the edge. The bevel is a function of that distance (`web/chrome/bevel.ts`). The face dome comes from the outline inflated like a membrane (Poisson's equation on a grid), which curves each stroke like a cushion without the crease distance would leave down its middle. Both are worked out once per SVG, so changing a setting moves vertices without triangulating again. On the web a shader evaluates the bevel per pixel; RealityKit uses per-vertex normals. The chrome itself is only reflection: a metal with no colour of its own, reflecting a photographed studio. Eleven ship (`monochrome`, the default, `broadway`, `countryHall`, `christmas`, `kominka`, `white`, `brown`, `wizja`, `london`, `neon`, `blocky`), each a CC0 Poly Haven panorama stored as an 8-bit grey AVIF of log brightness, about 25 KB at 2048 × 1024 (`Sources/AzaUI/Resources/Studios`, rebuilt by `bun web/studios.ts`). Only the studio a logo uses is loaded. `studio` (Svelte, Swift) or `--studio` (CLI) picks one; the web and CLI also take any `.hdr` panorama. On the web the dome's slope is read per pixel from a texture of the inflation, so mirror reflections never show the triangles.
+
+The bevel, settings and motion exist twice, in `web/chrome/*.ts` and `Sources/AzaUI/Chrome/*.swift`. Change both together. After changing the outline or the layout code, regenerate the layout AzaUI bundles:
+
+```sh
+bun web/cli.ts assets/aza.svg --only layout --out Sources/AzaUI/Resources
+```
 
 ## Building an app
 
@@ -163,4 +212,6 @@ Needs Xcode 27.
 | Task | Command |
 |---|---|
 | Build for iPhone and Mac | `scripts/build.sh` |
+| Chrome logo still, videos and mesh | `bun install && bun web/cli.ts logo.svg` |
+| Type-check the web code | `bun run check` |
 | Release a version | `git tag 0.x.y && git push --tags` |

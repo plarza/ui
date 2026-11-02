@@ -15,7 +15,13 @@ let package = Package(
         .library(name: "UITestSupport", targets: ["UITestSupport"]),
     ],
     targets: [
-        .target(name: "AzaUI", swiftSettings: settings),
+        .target(
+            name: "AzaUI",
+            // aza.chromelayout: `bun web/cli.ts assets/aza.svg --only layout --out Sources/AzaUI/Resources`.
+            // Studios: `bun web/studios.ts`.
+            resources: [.copy("Resources/aza.chromelayout"), .copy("Resources/Studios")],
+            swiftSettings: settings
+        ),
         // XCTestCase's methods are nonisolated, so the test helpers can't default to the main actor.
         .target(name: "UITestSupport", swiftSettings: [.swiftLanguageMode(.v5)]),
     ]
