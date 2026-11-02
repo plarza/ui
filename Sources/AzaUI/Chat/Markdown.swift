@@ -23,8 +23,9 @@ extension Chat {
                         .equatable()
                 }
             }
+            // No `.textSelection`: on iOS 27 it takes every tap and hold in the row, so buttons
+            // beside the text and the Copy menu never get them.
             .frame(maxWidth: .infinity, alignment: .leading)
-            .textSelection(.enabled)
         }
     }
 }

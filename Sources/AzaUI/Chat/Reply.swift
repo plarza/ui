@@ -2,18 +2,19 @@ import Foundation
 import Observation
 
 extension Chat {
-    /// An answer as it streams in. Text arrives in bursts; `shown` lets it out at an even pace, a
-    /// little behind, so the reply reads as if written rather than jumping a line at a time. The
-    /// further behind it is, the faster it catches up, so it's never more than a fraction of a
-    /// second behind.
+    /// An answer as it streams in, and the steps on the way to it. Text arrives in bursts; `shown`
+    /// lets it out at an even pace, a little behind, so the reply reads as if written rather than
+    /// jumping a line at a time. The further behind it is, the faster it catches up, so it's never
+    /// more than a fraction of a second behind.
     @MainActor @Observable
     public final class Reply {
         /// Everything received.
         public private(set) var text = ""
         /// What's on screen so far.
         public private(set) var shown = ""
-        /// What the assistant is doing instead of writing, like “Reading your runs”.
-        public private(set) var activity: String?
+        /// What the assistant thought and the tools it used, in order. The last is the step under
+        /// way until the answer starts.
+        public private(set) var steps: [Step] = []
         /// The stream has ended; `shown` may still be catching up.
         public private(set) var ended = false
 
@@ -32,26 +33,50 @@ extension Chat {
         /// More of the answer.
         public func append(_ more: String) {
             text += more
-            activity = nil
             pace()
         }
 
-        /// Starts the answer again: what came before was the assistant thinking aloud.
+        /// Starts the answer again: what came before was the assistant thinking aloud, and becomes
+        /// a thought.
         public func restart() {
+            let aloud = text.trimmingCharacters(in: .whitespacesAndNewlines)
+            if !aloud.isEmpty { add(.thought, aloud) }
             text = ""
             shown = ""
             count = 0
         }
 
-        /// The assistant is doing something, like using a tool.
-        public func doing(_ activity: String) {
-            self.activity = activity
+        /// A new thought starts.
+        public func think() {
+            add(.thought, "")
+        }
+
+        /// More of the thought under way.
+        public func thinking(_ more: String) {
+            if steps.last?.kind != .thought { think() }
+            steps[steps.count - 1].text += more
+        }
+
+        /// The assistant uses a tool: what it does, like “Looking at COROS”.
+        public func use(_ tool: String, detail: String? = nil) {
+            add(.tool, tool, detail: detail)
+        }
+
+        /// What the tool under way looked at, once it's known.
+        public func detail(_ detail: String) {
+            guard let i = steps.lastIndex(where: { $0.kind == .tool }) else { return }
+            steps[i].detail = detail
         }
 
         /// The stream has ended.
         public func end() {
             ended = true
-            activity = nil
+        }
+
+        private func add(_ kind: Step.Kind, _ text: String, detail: String? = nil) {
+            // An empty thought that never got any text gives way to what comes next.
+            if let last = steps.last, last.kind == .thought, last.text.isEmpty { steps.removeLast() }
+            steps.append(Step(id: steps.count, kind: kind, text: text, detail: detail))
         }
 
         /// Whether anything is still to come or still to show.

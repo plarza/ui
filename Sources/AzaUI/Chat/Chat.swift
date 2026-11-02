@@ -27,14 +27,21 @@ extension Chat {
         /// A line above an assistant message saying why it came, like “After your run”.
         public var label: String?
         public var state: State
+        /// How the assistant got to its answer, folded into one line above it.
+        public var steps: [Step]
+        /// How long the assistant worked on its answer.
+        public var worked: Duration?
 
-        public init(id: String, author: Author, text: String, date: Date, label: String? = nil, state: State = .sent) {
+        public init(id: String, author: Author, text: String, date: Date, label: String? = nil, state: State = .sent,
+                    steps: [Step] = [], worked: Duration? = nil) {
             self.id = id
             self.author = author
             self.text = text
             self.date = date
             self.label = label
             self.state = state
+            self.steps = steps
+            self.worked = worked
         }
     }
 }

@@ -57,7 +57,7 @@ extension Chat {
             }
             .onScrollPhaseChange { _, phase in touching = phase == .interacting }
             .onChange(of: reply?.shown) { follow() }
-            .onChange(of: reply?.activity) { follow() }
+            .onChange(of: reply?.steps) { follow() }
             .onChange(of: reply == nil) { follow() }
             .onChange(of: messages.last?.id) {
                 if messages.last?.author == .you {
@@ -114,7 +114,6 @@ extension Chat {
             case .you:
                 VStack(alignment: .trailing, spacing: 6) {
                     Text(message.text)
-                        .textSelection(.enabled)
                         .padding(.horizontal, 14)
                         .padding(.vertical, 9)
                         .background(.primary.opacity(0.08), in: .rect(cornerRadius: 20))
@@ -137,9 +136,12 @@ extension Chat {
                     if let label = message.label {
                         Text(label).font(.caption.weight(.semibold)).foregroundStyle(.secondary)
                     }
+                    if !message.steps.isEmpty {
+                        FoldedSteps(steps: message.steps, worked: message.worked)
+                    }
                     Markdown(message.text)
+                        .contextMenu { copy }
                 }
-                .contextMenu { copy }
             }
         }
 
@@ -148,16 +150,20 @@ extension Chat {
         }
     }
 
+    /// The answer being written: the steps so far on a line, then the answer as it comes. Once
+    /// it's done, its message takes its place with the steps folded away.
     struct ReplyRow: View {
         let reply: Reply
 
         var body: some View {
-            VStack(alignment: .leading, spacing: 10) {
+            VStack(alignment: .leading, spacing: 12) {
+                if !reply.steps.isEmpty {
+                    Timeline(steps: reply.steps, live: reply.shown.isEmpty && !reply.ended)
+                } else if reply.shown.isEmpty {
+                    Working(label: "Thinking")
+                }
                 if !reply.shown.isEmpty {
                     Markdown(reply.shown, streaming: true)
-                }
-                if reply.shown.isEmpty || reply.activity != nil {
-                    Working(label: reply.activity ?? "Thinking")
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
