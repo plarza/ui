@@ -3,9 +3,13 @@ import SwiftUI
 extension Chat {
     /// The conversation: your messages in bubbles on the right, the assistant's turns full width,
     /// a date over each new day, and the turn being written at the end. The turn being written has
-    /// the ID of the message it'll be stored as, so when that message arrives it takes the turn's
-    /// place without anything moving. The view follows new text only while you're at the bottom;
-    /// scroll up to read and it stays put, with a button back down. Sending brings you back.
+    /// the ID of the message it'll be stored as and is drawn by the same view, so when that message
+    /// arrives it takes the turn's place without anything moving.
+    ///
+    /// It stays at the bottom while you're there, as text comes in, a turn folds or the keyboard
+    /// moves. Scroll up to read and it stays put, with a button back down; sending brings you back.
+    /// The latest messages show, and earlier ones a page at a time from the top: every row is laid
+    /// out, so the scroll view always knows how tall it is.
     public struct Transcript<Empty: View>: View {
         var messages: [Message]
         var turn: Turn?
@@ -13,8 +17,12 @@ extension Chat {
         var empty: Empty
 
         @State private var position = ScrollPosition(edge: .bottom)
-        @State private var atBottom = true
-        @State private var touching = false
+        /// Following the bottom.
+        @State private var pinned = true
+        @State private var phase = ScrollPhase.idle
+        @State private var limit = Self.page
+
+        private static var page: Int { 40 }
 
         /// - Parameters:
         ///   - turn: The assistant's turn being written, if any. Leave it out once `messages` has
@@ -29,77 +37,83 @@ extension Chat {
             self.empty = empty()
         }
 
-        private enum Row: Identifiable {
-            case message(Message)
-            case turn(Turn)
-
-            var id: String {
-                switch self {
-                case .message(let m): m.id
-                case .turn(let t): t.id
-                }
-            }
-
-            var date: Date {
-                switch self {
-                case .message(let m): m.date
-                case .turn(let t): t.started
-                }
-            }
+        private struct Row: Identifiable {
+            var id: String
+            var date: Date
+            var message: Message?
+            var turn: Turn?
+            var yours: Bool { message?.author == .you }
         }
 
         private var rows: [Row] {
-            var rows = messages.map(Row.message)
-            if let turn, !messages.contains(where: { $0.id == turn.id }) { rows.append(.turn(turn)) }
+            var rows = messages.map { Row(id: $0.id, date: $0.date, message: $0) }
+            if let turn, !messages.contains(where: { $0.id == turn.id }) {
+                rows.append(Row(id: turn.id, date: turn.started, turn: turn))
+            }
             return rows
         }
 
+        /// Where the scroll view is, for keeping to the bottom.
+        private struct Metrics: Equatable {
+            var content: CGFloat
+            var container: CGFloat
+            /// How far the bottom of the content is below the bottom of what's visible.
+            var below: CGFloat
+        }
+
         public var body: some View {
-            let rows = rows
+            let all = rows
+            let shown = all.suffix(limit)
+            let days = Self.days(all)
             ScrollView {
-                LazyVStack(alignment: .leading, spacing: 18) {
-                    if rows.isEmpty {
+                VStack(alignment: .leading, spacing: 18) {
+                    if all.isEmpty {
                         empty.frame(maxWidth: .infinity).padding(.top, 60)
                     }
-                    ForEach(Array(rows.enumerated()), id: \.element.id) { i, row in
+                    if all.count > shown.count, let first = shown.first {
+                        Button("Earlier messages") { showEarlier(keeping: first.id) }
+                            .font(.footnote.weight(.semibold))
+                            .foregroundStyle(.secondary)
+                            .frame(maxWidth: .infinity)
+                            .padding(.top, 8)
+                            .accessibilityIdentifier("earlier")
+                    }
+                    ForEach(shown) { row in
                         VStack(alignment: .leading, spacing: 18) {
-                            if i == 0 || !Calendar.current.isDate(row.date, inSameDayAs: rows[i - 1].date) {
+                            if days.contains(row.id) {
                                 DayStamp(date: row.date)
                             }
-                            switch row {
-                            case .message(let m) where m.author == .you:
+                            if row.yours, let m = row.message {
                                 YourMessage(message: m, retry: retry)
-                            case .message(let m):
-                                TurnView(parts: m.parts, text: m.text, label: m.label, worked: m.worked)
-                            case .turn(let t):
-                                LiveTurn(turn: t)
+                            } else {
+                                AssistantRow(message: row.message, turn: row.turn)
                             }
                         }
                     }
                 }
+                .scrollTargetLayout()
                 .padding(.horizontal, 20)
                 .padding(.vertical, 12)
             }
             .scrollPosition($position)
             .defaultScrollAnchor(.bottom)
             .scrollDismissesKeyboard(.interactively)
-            .onScrollGeometryChange(for: Bool.self) { g in
-                // `containerSize` is the visible area inside the insets.
-                g.contentOffset.y + g.containerSize.height >= g.contentSize.height - 40
-            } action: { _, bottom in
-                atBottom = bottom
+            .onScrollPhaseChange { _, new in phase = new }
+            .onScrollGeometryChange(for: Metrics.self) { g in
+                Metrics(content: g.contentSize.height, container: g.containerSize.height,
+                        below: g.contentSize.height + g.contentInsets.bottom - g.containerSize.height - g.contentOffset.y)
+            } action: { old, new in
+                keep(old, new)
             }
-            .onScrollGeometryChange(for: CGFloat.self) { $0.contentSize.height } action: { _, _ in follow() }
-            .onScrollPhaseChange { _, phase in touching = phase == .interacting }
             .onChange(of: messages.last?.id) {
-                if messages.last?.author == .you {
-                    withAnimation(.smooth) { position.scrollTo(edge: .bottom) }
-                    atBottom = true
-                }
+                guard messages.last?.author == .you else { return }
+                pinned = true
+                withAnimation(.smooth) { position.scrollTo(edge: .bottom) }
             }
             .overlay(alignment: .bottom) {
-                if !atBottom {
+                if !pinned {
                     Button("Latest", systemImage: "arrow.down") {
+                        pinned = true
                         withAnimation(.smooth) { position.scrollTo(edge: .bottom) }
                     }
                     .labelStyle(.iconOnly)
@@ -111,27 +125,67 @@ extension Chat {
                     .accessibilityIdentifier("latest")
                 }
             }
-            .animation(.snappy, value: atBottom)
+            .animation(.snappy, value: pinned)
         }
 
-        /// Keeps the newest text in view as it grows, unless you've scrolled away or have a finger on
-        /// it.
-        private func follow() {
-            guard atBottom, !touching, turn != nil else { return }
+        /// The rows that start a new day.
+        private static func days(_ rows: [Row]) -> Set<String> {
+            var days = Set<String>()
+            for (i, row) in rows.enumerated() where i == 0 || !Calendar.current.isDate(row.date, inSameDayAs: rows[i - 1].date) {
+                days.insert(row.id)
+            }
+            return days
+        }
+
+        /// While you scroll, you're following the bottom only if you're at it. Otherwise, whenever
+        /// the content or the space for it changes size while following, it goes back to the
+        /// bottom, and it never rests past the end, where there's nothing to see.
+        private func keep(_ old: Metrics, _ new: Metrics) {
+            switch phase {
+            case .tracking, .interacting, .decelerating:
+                pinned = new.below < 40
+                return
+            case .animating:
+                return
+            default:
+                break
+            }
+            let resized = old.content != new.content || old.container != new.container
+            if (pinned && (resized || new.below > 1)) || new.below < -1 {
+                var t = Transaction()
+                t.disablesAnimations = true
+                withTransaction(t) { position.scrollTo(edge: .bottom) }
+            } else if new.below < 40 {
+                pinned = true
+            }
+        }
+
+        private func showEarlier(keeping id: String) {
             var t = Transaction()
             t.disablesAnimations = true
-            withTransaction(t) { position.scrollTo(edge: .bottom) }
+            withTransaction(t) {
+                limit += Self.page
+                position.scrollTo(id: id, anchor: .top)
+            }
         }
     }
 
-    /// The turn being written, read from `Turn` so only this row redraws as it streams.
-    struct LiveTurn: View {
-        let turn: Turn
+    /// An assistant's message, or the turn being written that it'll become: the one view for both,
+    /// so the handover keeps the row as it is. Reads `Turn` here, so only this row redraws as it
+    /// streams.
+    struct AssistantRow: View {
+        var message: Message?
+        var turn: Turn?
 
         var body: some View {
-            TurnView(parts: turn.parts, text: "", worked: turn.ended ? .seconds(Date.now.timeIntervalSince(turn.started)) : nil,
-                     live: (turn.started, !turn.ended))
-                .accessibilityIdentifier("reply")
+            TurnView(
+                parts: turn?.parts ?? message?.parts ?? [],
+                text: message?.text ?? "",
+                label: message?.label,
+                worked: turn.map(\.worked) ?? message?.worked,
+                live: turn.map { .init(started: $0.started, going: !$0.ended, writing: $0.isActive) })
+                .accessibilityElement(children: .contain)
+                .accessibilityIdentifier(turn == nil ? "message" : "reply")
         }
     }
 
@@ -157,6 +211,7 @@ extension Chat {
                     .padding(.horizontal, 14)
                     .padding(.vertical, 9)
                     .background(.primary.opacity(0.08), in: .rect(cornerRadius: 20))
+                    .opacity(message.state == .sending ? 0.6 : 1)
                     .contextMenu {
                         Button("Copy", systemImage: "doc.on.doc") { Pasteboard.copy(message.text) }
                     }

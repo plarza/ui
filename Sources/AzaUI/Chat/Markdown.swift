@@ -71,11 +71,21 @@ extension Chat.Markdown {
                 let tail = t[open...]
                 if !tail.contains("]") || (tail.contains("](") && !tail.contains(")")) { t = String(t[..<open]) }
             }
-            if t.components(separatedBy: "`").count % 2 == 0 { t += "`" }
-            if t.components(separatedBy: "**").count % 2 == 0 {
-                t = t.hasSuffix("**") ? String(t.dropLast(2)) : t + "**"
+            // A closer after a space isn't one, so the text being written loses its trailing space.
+            var closers = ""
+            if t.components(separatedBy: "`").count % 2 == 0 { closers = "`" + closers }
+            let inCode = !closers.isEmpty
+            if !inCode {
+                if t.components(separatedBy: "**").count % 2 == 0 {
+                    if t.hasSuffix("**") { t.removeLast(2) } else { closers = "**" + closers }
+                }
+                if t.replacingOccurrences(of: "**", with: "").count(where: { $0 == "*" }) % 2 == 1 {
+                    if t.hasSuffix("*") { t.removeLast() } else { closers = "*" + closers }
+                }
             }
-            return t
+            guard !closers.isEmpty else { return t }
+            while t.last?.isWhitespace == true { t.removeLast() }
+            return t + closers
         }
     }
 

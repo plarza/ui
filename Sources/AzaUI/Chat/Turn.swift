@@ -16,6 +16,8 @@ extension Chat {
         public private(set) var parts: [Part] = []
         /// The stream has ended; the text may still be catching up.
         public private(set) var ended = false
+        /// When the stream ended, so how long it worked stops counting there.
+        public private(set) var finished: Date?
 
         /// The text part being written, in full; `parts` has as much of it as is shown.
         private var writing = ""
@@ -56,14 +58,27 @@ extension Chat {
         }
 
         /// The stream has ended.
-        public func end() { ended = true }
+        public func end() {
+            guard !ended else { return }
+            ended = true
+            finished = .now
+        }
 
         /// Whether anything is still to come or still to show.
         public var isActive: Bool { !ended || shown < writing.count }
 
+        /// How long it worked: until now while it works, until the stream ended after.
+        public var worked: Duration { .seconds(max(0, (finished ?? .now).timeIntervalSince(started))) }
+
         /// Returns once all the text is shown, so the stored message can take the turn's place.
         public func settle() async {
             while shown < writing.count, !Task.isCancelled {
+                // Nothing is writing it out: show the rest at once rather than wait for ever.
+                if pacing == nil, let i = parts.indices.last, parts[i].kind == .text {
+                    parts[i].text = writing
+                    shown = writing.count
+                    return
+                }
                 try? await Task.sleep(for: .milliseconds(16))
             }
         }

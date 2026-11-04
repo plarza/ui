@@ -4,15 +4,24 @@ extension Chat {
     /// An assistant's turn, being written or done. While it's written every part shows in order:
     /// thoughts and tools on a line, text as it comes, under a header with how long it's been
     /// working. Once it's done, everything but the answer folds into the header, which opens it
-    /// again. The same view shows the turn live and as stored, so finishing moves nothing.
+    /// again, and a Copy button sits under the answer. The same view shows the turn live and as
+    /// stored, so finishing moves nothing.
     struct TurnView: View {
+        /// While it's being written.
+        struct Live: Equatable {
+            var started: Date
+            /// The stream is still going.
+            var going: Bool
+            /// Text is still being written out, maybe after the stream ended.
+            var writing: Bool
+        }
+
         var parts: [Part]
         /// The answer, for a message with no parts.
         var text: String
         var label: String?
         var worked: Duration?
-        /// While it's being written: when it started, and whether the stream is still going.
-        var live: (started: Date, going: Bool)?
+        var live: Live?
 
         @State private var open = false
 
@@ -24,6 +33,7 @@ extension Chat {
         }
         private var steps: Int { parts.indices.filter { $0 != answer && (parts[$0].kind == .tool || !parts[$0].text.isEmpty) }.count }
         private var shows: Bool { working || open }
+        private var answerText: String { answer.map { parts[$0].text } ?? (parts.isEmpty ? text : "") }
 
         var body: some View {
             VStack(alignment: .leading, spacing: 10) {
@@ -34,26 +44,25 @@ extension Chat {
                     Header(steps: steps, worked: worked, started: live?.started, working: working, open: $open)
                 }
                 if parts.isEmpty {
-                    if !text.isEmpty { Markdown(text).contextMenu { copy } }
+                    if !text.isEmpty { Markdown(text) }
                 } else {
                     ForEach(groups, id: \.first) { group in
-                        if parts[group.first!].kind == .text {
-                            let i = group.first!
+                        let i = group[0]
+                        if parts[i].kind == .text {
                             if i == answer || shows {
-                                Markdown(parts[i].text, streaming: working && i == parts.count - 1)
+                                Markdown(parts[i].text, streaming: live?.writing == true && i == parts.count - 1)
                                     .opacity(i == answer || working ? 1 : 0.7)
-                                    .contextMenu { if i == answer { copy } }
-                                    .transition(.opacity)
                             }
                         } else if shows {
                             Trace(parts: group.map { parts[$0] }, current: working && group.last == parts.count - 1)
-                                .transition(.opacity.combined(with: .offset(y: -4)))
                         }
                     }
                 }
+                if !working, live?.writing != true, !answerText.isEmpty {
+                    CopyButton(text: answerText)
+                }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
-            .animation(.smooth(duration: 0.3), value: shows)
         }
 
         /// Runs of parts: each text alone, and the thoughts and tools between them together.
@@ -68,9 +77,33 @@ extension Chat {
             }
             return groups
         }
+    }
 
-        private var copy: some View {
-            Button("Copy", systemImage: "doc.on.doc") { Pasteboard.copy(answer.map { parts[$0].text } ?? text) }
+    /// Copies an answer. A button rather than a long press: a context menu over a reply taller than
+    /// the screen dims everything around a preview that doesn't fit.
+    struct CopyButton: View {
+        var text: String
+        @State private var copied = false
+
+        var body: some View {
+            Button(copied ? "Copied" : "Copy", systemImage: copied ? "checkmark" : "doc.on.doc") {
+                Pasteboard.copy(text)
+                copied = true
+            }
+            .labelStyle(.iconOnly)
+            .font(.footnote.weight(.semibold))
+            .foregroundStyle(.secondary)
+            .frame(width: 32, height: 28, alignment: .leading)
+            .contentShape(.rect)
+            .buttonStyle(.plain)
+            .contentTransition(.symbolEffect(.replace))
+            .sensoryFeedback(.success, trigger: copied) { _, now in now }
+            .task(id: copied) {
+                guard copied else { return }
+                try? await Task.sleep(for: .seconds(1.5))
+                copied = false
+            }
+            .accessibilityIdentifier("copyAnswer")
         }
     }
 
@@ -85,7 +118,7 @@ extension Chat {
 
         var body: some View {
             Button {
-                open.toggle()
+                withAnimation(.smooth(duration: 0.3)) { open.toggle() }
             } label: {
                 HStack(spacing: 5) {
                     if working, let started {
@@ -101,11 +134,11 @@ extension Chat {
                 }
                 .font(.footnote.weight(.medium))
                 .foregroundStyle(.secondary)
+                .frame(minHeight: 24)
                 .contentShape(.rect)
             }
             .buttonStyle(.plain)
             .disabled(working)
-            .animation(.snappy, value: open)
             .accessibilityValue(working ? "Working" : open ? "Open" : "Closed")
             .accessibilityIdentifier("trace")
         }
@@ -192,7 +225,7 @@ extension Chat {
                 .font(.subheadline.weight(.medium))
                 .foregroundStyle(.secondary)
                 .overlay {
-                    TimelineView(.animation) { context in
+                    TimelineView(.animation(minimumInterval: 1 / 30)) { context in
                         let phase = context.date.timeIntervalSinceReferenceDate.truncatingRemainder(dividingBy: 1.6) / 1.6
                         LinearGradient(colors: [.clear, .primary.opacity(0.9), .clear], startPoint: .leading, endPoint: .trailing)
                             .frame(width: 60)
