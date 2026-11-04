@@ -20,6 +20,14 @@ Shared SwiftUI for Coach, Stream and Timeline: the parts that must look and beha
 
 Signing in asks the aza app for a certificate (protocol section 7). AzaUI opens `aza:approve#req=…`; the aza app shows what the app asks for and, once approved, opens `https://<app ID>/aza#aza=…`. That's a universal link back to the app, so only the real app can receive it. AzaUI then uploads the certificate and loads the profile. The client's keys and certificate stay in the Keychain, for this device only. Without the aza app, signing in says to get it.
 
+A Mac has no aza app, so it signs in from the phone's: AzaUI shows a QR code that the aza app scans (protocol section 7, from another machine). The app's server at the app ID takes part, with three requests:
+
+| Request | What it does |
+|---|---|
+| `POST /aza/request` `{"approve": "aza:approve#req=…"}` | Hosts the Mac's request at `/.well-known/aza/request/<id>` and answers `{"qr"}`, the QR code's payload |
+| `POST /aza` | The aza app posts the certificate here, the request's return URL |
+| `GET /aza/certificate/<client fingerprint>` | 204 until the aza app has answered, then `{"url": "https://<app ID>/aza#aza=…"}` once |
+
 The app needs:
 
 - An app ID: a domain the app's team controls, such as `coach.aza.network`.

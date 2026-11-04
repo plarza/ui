@@ -9,6 +9,18 @@ struct SignInScreen: View {
     @Environment(\.openURL) private var openURL
 
     var body: some View {
+        #if os(macOS)
+        if let qr = account.qr {
+            PhoneSignIn(qr: qr).frame(minWidth: 380, minHeight: 460)
+        } else {
+            screen
+        }
+        #else
+        screen
+        #endif
+    }
+
+    private var screen: some View {
         VStack(spacing: 0) {
             Spacer()
             Image(app.icon)

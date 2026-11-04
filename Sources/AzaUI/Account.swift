@@ -52,6 +52,8 @@ public final class Account {
     public private(set) var waiting = false
     /// Why signing in last failed, shown by the screen that started it.
     public var problem: SignInProblem?
+    /// On a Mac, the QR code to scan with the aza app on a phone while signing in.
+    public private(set) var qr: String?
 
     private var appID: String?
     private var scopes = ["sign-in"]
@@ -96,20 +98,77 @@ public final class Account {
         }
         do {
             let client = try AzaClient(app: appID, scopes: scopes, returnUrl: "https://\(appID)/aza")
-            guard let url = client.approveUrl().flatMap(URL.init(string:)) else { return }
-            // iOS may end this app while the aza app is open, so the waiting client is kept where it can come back.
-            Keychain.write("pending", await client.save())
-            pending = client
-            waiting = true
-            open(url) { [self] opened in
-                if !opened {
-                    waiting = false
-                    problem = .noAzaApp
-                }
-            }
+            #if os(macOS)
+            try await signInFromPhone(client, appID: appID)
+            #else
+            try await signInHere(client, open: open)
+            #endif
         } catch {
             problem = .failed(error.localizedDescription)
         }
+    }
+
+    /// The same-machine path: the aza app on this device approves.
+    private func signInHere(_ client: AzaClient, open: OpenURLAction) async throws {
+        guard let url = client.approveUrl().flatMap(URL.init(string:)) else { return }
+        // iOS may end this app while the aza app is open, so the waiting client is kept where it can come back.
+        Keychain.write("pending", await client.save())
+        pending = client
+        waiting = true
+        open(url) { [self] opened in
+            if !opened {
+                waiting = false
+                problem = .noAzaApp
+            }
+        }
+    }
+
+    #if os(macOS)
+    /// A Mac has no aza app, so it signs in from the phone's (protocol section 7, from another machine). The
+    /// app's server hosts the request: `POST https://<app ID>/aza/request` with `{"approve": "aza:approve#req=…"}`
+    /// answers `{"qr": …}`. The aza app scans the QR code, fetches the request from the server and posts the
+    /// certificate to the return URL; the Mac collects it from `GET https://<app ID>/aza/certificate/<client
+    /// fingerprint>`, which answers 204 until then and `{"url": "https://<app ID>/aza#aza=…"}` after.
+    private func signInFromPhone(_ client: AzaClient, appID: String) async throws {
+        guard let approve = client.approveUrl() else { return }
+        let base = URL(string: "https://\(appID)/aza")!
+        var post = URLRequest(url: base.appending(path: "request"))
+        post.httpMethod = "POST"
+        post.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        post.httpBody = try JSONEncoder().encode(["approve": approve])
+        let (data, response) = try await URLSession.shared.data(for: post)
+        struct Hosted: Decodable { var qr: String }
+        guard (response as? HTTPURLResponse)?.statusCode == 200 else { throw SignInError.server }
+        pending = client
+        qr = try JSONDecoder().decode(Hosted.self, from: data).qr
+        waiting = true
+        defer { if self.pending === client { qr = nil; waiting = false; pending = nil } }
+        let poll = base.appending(path: "certificate/\(await client.fingerprint())")
+        let until = Date.now.addingTimeInterval(10 * 60)
+        while waiting, pending === client, Date.now < until {
+            if let (data, response) = try? await URLSession.shared.data(from: poll),
+               (response as? HTTPURLResponse)?.statusCode == 200 {
+                struct Answer: Decodable { var url: URL }
+                let answer = try JSONDecoder().decode(Answer.self, from: data)
+                qr = nil
+                await finish(answer.url)
+                return
+            }
+            try await Task.sleep(for: .seconds(2))
+        }
+    }
+
+    private enum SignInError: LocalizedError {
+        case server
+        var errorDescription: String? { "The app's server didn't answer. Try again in a moment." }
+    }
+    #endif
+
+    /// Stops waiting for the aza app.
+    public func cancelSignIn() {
+        waiting = false
+        qr = nil
+        pending = nil
     }
 
     /// Takes the aza app's answer, `https://<app ID>/aza#aza=…`. False for any other URL.

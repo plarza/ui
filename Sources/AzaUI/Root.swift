@@ -59,6 +59,11 @@ private struct Root: ViewModifier {
             .fullScreenCover(isPresented: .constant(showsSignIn && !account.answered)) { cover }
             #else
             .sheet(isPresented: .constant(showsSignIn && !account.answered)) { cover }
+            // Signing in later, from the profile page.
+            .sheet(isPresented: Binding(get: { showsSignIn && account.answered && account.qr != nil },
+                                        set: { if !$0 { account.cancelSignIn() } })) {
+                if let qr = account.qr { PhoneSignIn(qr: qr).modifier(Shared(info: info, accent: accent, account: account)) }
+            }
             #endif
     }
 
