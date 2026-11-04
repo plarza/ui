@@ -141,10 +141,11 @@ public struct AppearanceSection: View {
                 Text("Theme").foregroundStyle(.secondary)
                 Spacer()
                 Picker("Theme", selection: $appearance) {
-                    ForEach(Appearance.allCases) { Text($0.title).tag($0) }
+                    ForEach(Appearance.choices) { Text($0.title).tag($0) }
                 }
                 .pickerStyle(.segmented)
-                .frame(width: 220)
+                .labelsHidden()
+                .fixedSize()
                 .accessibilityIdentifier("theme")
             }
             .frame(minHeight: 50)
