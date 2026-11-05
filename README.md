@@ -8,7 +8,8 @@ Shared SwiftUI for Coach, Stream and Timeline: the parts that must look and beha
 |---|---|
 | `.azaUI(name:icon:accent:appearance:appID:scopes:showsSignIn:)` | On the window's root view. Applies the theme and colour, provides `Account.shared`, shows the sign-in screen on first launch, and takes the aza app's answer when it opens the app. |
 | `ProfileButton` | Top right of the main screen. Your picture in a glass ring when signed in, a glass person button when not. |
-| `AccountRow` | First row of the app's profile page. Opens the account page (picture, @handle, sign out), or signs in. |
+| `AccountRow` | First row of the app's profile page: the `AccountChip`, opening the account page (picture, handle, ID, sign out), or Sign in with aza. |
+| `AccountChip` | An aza account in one element, the same in every app and in the aza app: picture, the aza mark as the @ before the name, then the handle and the start of the account's ID. |
 | `AppearanceSection` | Theme (System, Light, Dark) and colour (presets plus a custom picker). |
 | `Account`, `Profile` | Who's signed in: name, picture and handle (protocol section 6), and `Account.client`, the app's [AzaKit](https://github.com/plarza/protocol) client for sync data and server sign-ins. |
 | `Accent`, `Appearance`, `Color(hex:)` | The stored colour and theme (`accent`, `appearance` keys). `Accent.standard` is black in light mode and white in dark. |
@@ -18,7 +19,7 @@ Shared SwiftUI for Coach, Stream and Timeline: the parts that must look and beha
 | `ServerSentEvents` | Reads a `text/event-stream` and picks it back up after a dropped connection. |
 | `UITestSupport` | `poll`, `wait`, `launchAtSignIn()` and `launchPastSignIn(signedIn:)` for UI tests. |
 
-Signing in asks the aza app for a certificate (protocol section 7). AzaUI opens `aza:approve#req=…`; the aza app shows what the app asks for and, once approved, opens `https://<app ID>/aza#aza=…`. That's a universal link back to the app, so only the real app can receive it. AzaUI then uploads the certificate and loads the profile. The client's keys and certificate stay in the Keychain, for this device only. Without the aza app, signing in says to get it.
+Signing in asks the aza app for a certificate (protocol section 7), labelled with this machine's name (`iPhone`, or the Mac's name) so the aza app can say where the sign-in is from. AzaUI opens `aza:approve#req=…`; the aza app shows what the app asks for and, once approved, opens `https://<app ID>/aza#aza=…`. That's a universal link back to the app, so only the real app can receive it. AzaUI then uploads the certificate and loads the profile. The client's keys and certificate stay in the Keychain, for this device only. Without the aza app, signing in says to get it.
 
 A Mac has no aza app, so it signs in from the phone's: AzaUI shows a QR code that the aza app scans (protocol section 7, from another machine). The app's server at the app ID takes part, with three requests:
 

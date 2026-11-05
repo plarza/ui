@@ -12,11 +12,14 @@ public struct Profile: Codable, Equatable, Sendable {
     public var picture: URL?
     /// A domain the identity has proved it owns, shown as @handle.
     public var handle: String?
+    /// The identity ID, as hex. Nil for the sample account and profiles saved before it was kept.
+    public var identity: String?
 
-    public init(name: String, picture: URL? = nil, handle: String? = nil) {
+    public init(name: String, picture: URL? = nil, handle: String? = nil, identity: String? = nil) {
         self.name = name
         self.picture = picture
         self.handle = handle
+        self.identity = identity
     }
 
     /// Stands in for a real identity in apps without an aza app ID, and in UI tests. Plainly not a real account.
@@ -97,7 +100,7 @@ public final class Account {
             return
         }
         do {
-            let client = try AzaClient(app: appID, scopes: scopes, returnUrl: "https://\(appID)/aza")
+            let client = try AzaClient(app: appID, scopes: scopes, returnUrl: "https://\(appID)/aza", label: Self.machine)
             #if os(macOS)
             try await signInFromPhone(client, appID: appID)
             #else
@@ -214,7 +217,21 @@ public final class Account {
             try image.write(to: file)
             picture = file
         }
-        return Profile(name: info.name ?? "aza account", picture: picture, handle: info.handle)
+        return Profile(name: info.name ?? "aza account", picture: picture, handle: info.handle, identity: info.identity)
+    }
+
+    /// What the aza app calls this machine while approving it, and in its list of where each app is signed in:
+    /// trimmed to the protocol's 64 plain characters, or nil when there's nothing left to send.
+    static var machine: String? {
+        #if os(macOS)
+        let name = Host.current().localizedName ?? "Mac"
+        #else
+        let name = UIDevice.current.model
+        #endif
+        let plain = String(name.unicodeScalars.filter { !$0.properties.isDefaultIgnorableCodePoint && $0.properties.generalCategory != .control
+            && $0.properties.generalCategory != .format })
+        let label = String(plain.trimmingCharacters(in: .whitespacesAndNewlines).prefix(64)).trimmingCharacters(in: .whitespaces)
+        return label.isEmpty ? nil : label
     }
 
     public func skip() {
@@ -252,7 +269,7 @@ public enum SignInProblem: Equatable, Sendable {
 
     var message: String {
         switch self {
-        case .noAzaApp: "Signing in with aza needs the aza app on this device. It keeps your account and approves sign-ins."
+        case .noAzaApp: "Signing in needs the aza app."
         case .failed(let reason): reason
         }
     }

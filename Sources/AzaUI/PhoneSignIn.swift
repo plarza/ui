@@ -18,11 +18,6 @@ struct PhoneSignIn: View {
                 .background(.white, in: .rect(cornerRadius: 20))
                 .accessibilityLabel("QR code to sign in to \(app.name)")
                 .accessibilityIdentifier("signIn.qr")
-            Text("On your iPhone, open aza, tap Scan and point it here. \(app.name) on this Mac signs in once you approve.")
-                .font(.callout)
-                .foregroundStyle(.secondary)
-                .multilineTextAlignment(.center)
-                .frame(maxWidth: 300)
             HStack(spacing: 8) {
                 ProgressView().controlSize(.small)
                 Text("Waiting for aza").foregroundStyle(.secondary)
