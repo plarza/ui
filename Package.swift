@@ -12,7 +12,7 @@ let settings: [SwiftSetting] = [
 // it with `AZA_PROTOCOL_PATH=<protocol>`.
 let protocolPath = Context.environment["AZA_PROTOCOL_PATH"]
 let azaKit: Package.Dependency = protocolPath.map { .package(path: $0) }
-    ?? .package(url: "https://github.com/plarza/protocol", from: "0.3.0")
+    ?? .package(url: "https://github.com/plarza/protocol", from: "0.4.0")
 // A package's identity is the last component of its URL or folder.
 let protocolIdentity = protocolPath.map { URL(fileURLWithPath: $0).lastPathComponent.lowercased() } ?? "protocol"
 
