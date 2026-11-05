@@ -117,7 +117,8 @@ struct AccountPage: View {
         #if os(iOS)
         .navigationBarTitleDisplayMode(.inline)
         #endif
-        .confirmationDialog("Sign out of \(app.name)?", isPresented: $confirmSignOut, titleVisibility: .visible) {
+        .alert("Sign out of \(app.name)?", isPresented: $confirmSignOut) {
+            Button("Cancel", role: .cancel) {}
             Button("Sign out", role: .destructive) {
                 account.signOut()
                 dismiss()
