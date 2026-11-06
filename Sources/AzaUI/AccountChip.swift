@@ -89,8 +89,6 @@ struct EngravedMark: View {
             AzaLogo().fill(.white.opacity(scheme == .dark ? 0.12 : 0.9), style: FillStyle(eoFill: true)).offset(y: 1.5)
             AzaLogo().fill(.black.opacity(scheme == .dark ? 0.45 : 0.1), style: FillStyle(eoFill: true))
         }
-        // Mirrored, so the part left showing at the chip's edge reads as the a.
-        .scaleEffect(x: -1)
         .accessibilityHidden(true)
     }
 }
