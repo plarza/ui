@@ -102,7 +102,14 @@ export function layout(outline: Ring[]): Layout {
   // rescans every edge after each call, then constrain the few that are missing.
   const missing: [number, number][] = [];
   const c = constrain as unknown as { findEdge(a: number, b: number): number; protect(edge: number): void };
-  for (const [a, b] of edges) {
+  // Delaunator leaves out a point that repeats another (rings of separate shapes can meet), and
+  // findEdge never returns for a point it left out: such edges use the copy it kept, or are
+  // dropped when it kept none.
+  const left = constrain.untriangulatedPoints();
+  const twin = twins(left, xs, ys), out = new Set(left);
+  for (let [a, b] of edges) {
+    a = twin.get(a) ?? a; b = twin.get(b) ?? b;
+    if (a === b || out.has(a) || out.has(b)) continue;
     const edge = c.findEdge(a, b);
     // findEdge: an edge index, minus one on the hull, or Infinity when there is no edge.
     if (Number.isFinite(edge)) c.protect(Math.abs(edge));
@@ -182,6 +189,21 @@ function sample(grid: Float64Array, n: number, i: number, j: number) {
   const i0 = Math.floor(i), j0 = Math.floor(j), fi = i - i0, fj = j - j0;
   const k = j0 * n + i0;
   return (grid[k] * (1 - fi) + grid[k + 1] * fi) * (1 - fj) + (grid[k + n] * (1 - fi) + grid[k + n + 1] * fi) * fj;
+}
+
+/** For each point left out of the triangulation, a point at the same place that is in it. */
+function twins(left: number[], xs: number[], ys: number[]): Map<number, number> {
+  const twin = new Map<number, number>();
+  if (!left.length) return twin;
+  const out = new Set(left);
+  const at = new Map<string, number[]>();
+  for (const i of left) push(at, `${xs[i]},${ys[i]}`, i);
+  for (let i = 0; i < xs.length; i++) {
+    if (out.has(i)) continue;
+    const copies = at.get(`${xs[i]},${ys[i]}`);
+    if (copies) for (const k of copies) twin.set(k, i);
+  }
+  return twin;
 }
 
 /** Douglas–Peucker on a closed ring: drops points while the ring stays within `tolerance`. */

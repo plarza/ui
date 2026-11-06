@@ -16,7 +16,8 @@
   },
   "scripts": {
     "chrome": "bun web/cli.ts",
-    "check": "tsc -p tsconfig.json && svelte-check --tsconfig ./tsconfig.json --threshold error --tsgo"
+    "check": "tsc -p tsconfig.json && svelte-check --tsconfig ./tsconfig.json --threshold error --tsgo",
+    "test": "bun test tests"
   },
   "dependencies": {
     "@kninnug/constrainautor": "^4.1.0",
