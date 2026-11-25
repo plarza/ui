@@ -1,9 +1,10 @@
 // How the logo moves: drag to spin it, and it keeps spinning and slows (friction), then eases
 // back to rest (settle). On top of that it leans toward the cursor, or with the phone (gyro), and
-// it can sway on its own, as the CLI's sway video does.
+// it can sway on its own, as the CLI's sway video does. Plain maths, no three.js, so the light
+// renderer (web/ascii) moves the same way.
 // AzaUI's ChromeLogo.swift mirrors this; change both together.
 
-import * as THREE from 'three';
+import { axisAngle, identity, mul, normalize, slerp, yxz, type Quat } from './quat';
 import type { ChromeSettings } from './settings';
 
 const rad = Math.PI / 180;
@@ -11,34 +12,33 @@ const rad = Math.PI / 180;
 const swayPeriod = 10;
 /** Seconds the sway takes to grow from nothing, so the first frame is the rest pose. */
 const swayEaseIn = 3;
-const yAxis = new THREE.Vector3(0, 1, 0), xAxis = new THREE.Vector3(1, 0, 0);
 
 export class Motion {
   /** The spin from dragging. */
-  private spin = new THREE.Quaternion();
+  private spin: Quat = identity();
   /** Spin velocity in rad/s about screen x and y. */
-  private velocity = new THREE.Vector2();
+  private velocity: [number, number] = [0, 0];
   private dragging = false;
   private recent: { t: number; dx: number; dy: number }[] = [];
   /** Lean, in [-1, 1] on each axis, and where it's heading. */
-  private lean = new THREE.Vector2();
-  private leanTarget = new THREE.Vector2();
+  private lean: [number, number] = [0, 0];
+  private leanTarget: [number, number] = [0, 0];
   private leanScale = 0;
-  private gyroRest?: THREE.Vector2;
-  private out = new THREE.Quaternion();
+  private gyroRest?: [number, number];
   /** Seconds since the first step, and the sway at the last one, in degrees. */
   private time = 0;
   private sway = 0;
 
   /** True while the logo is still moving, so a renderer can stop drawing when it's still. */
   get moving() {
-    const turned = 1 - Math.abs(this.spin.w);
-    return this.sway > 0 || this.dragging || this.velocity.lengthSq() > 1e-6 || turned > 1e-7 || this.lean.distanceToSquared(this.leanTarget) > 1e-7;
+    const turned = 1 - Math.abs(this.spin[3]);
+    const [vx, vy] = this.velocity, dx = this.lean[0] - this.leanTarget[0], dy = this.lean[1] - this.leanTarget[1];
+    return this.sway > 0 || this.dragging || vx * vx + vy * vy > 1e-6 || turned > 1e-7 || dx * dx + dy * dy > 1e-7;
   }
 
   start() {
     this.dragging = true;
-    this.velocity.set(0, 0);
+    this.velocity = [0, 0];
     this.recent = [];
   }
 
@@ -54,62 +54,59 @@ export class Motion {
     this.dragging = false;
     const span = this.recent.length > 1 ? t - this.recent[0].t : 0;
     if (span > 0.005 && t - this.recent[this.recent.length - 1].t < 0.05) {
-      const sum = this.recent.reduce((s, m) => s.add(new THREE.Vector2(m.dy, m.dx)), new THREE.Vector2());
-      this.velocity.copy(sum.divideScalar(span));
+      const sx = this.recent.reduce((s, m) => s + m.dy, 0), sy = this.recent.reduce((s, m) => s + m.dx, 0);
+      this.velocity = [sx / span, sy / span];
     }
     this.recent = [];
   }
 
   /** The cursor relative to the logo, roughly -1 to 1 across the view. */
   pointer(x: number, y: number, s: ChromeSettings) {
-    this.leanTarget.set(clamp(y), clamp(x));
+    this.leanTarget = [clamp(y), clamp(x)];
     this.leanScale = s.cursorTilt;
   }
 
   pointerLeft() {
-    this.leanTarget.set(0, 0);
+    this.leanTarget = [0, 0];
   }
 
   /** Device tilt in degrees (DeviceOrientationEvent's beta and gamma, or CoreMotion's pitch and roll). */
   gyro(beta: number, gamma: number, s: ChromeSettings) {
     // Lean relative to how the phone is usually held, which drifts slowly toward the current pose.
-    const now = new THREE.Vector2(beta, gamma);
-    this.gyroRest ??= now.clone();
-    this.gyroRest.lerp(now, 0.01);
-    const d = now.clone().sub(this.gyroRest).divideScalar(25);
-    this.leanTarget.set(clamp(-d.x), clamp(-d.y));
+    const rest = this.gyroRest ?? [beta, gamma];
+    this.gyroRest = [rest[0] + (beta - rest[0]) * 0.01, rest[1] + (gamma - rest[1]) * 0.01];
+    this.leanTarget = [clamp(-(beta - this.gyroRest[0]) / 25), clamp(-(gamma - this.gyroRest[1]) / 25)];
     this.leanScale = s.gyroTilt;
   }
 
   /** Advance by dt seconds; returns the rotation to apply on top of the rest pose. */
-  step(dt: number, s: ChromeSettings): THREE.Quaternion {
+  step(dt: number, s: ChromeSettings): Quat {
     dt = Math.min(dt, 0.1);
     if (!this.dragging) {
-      this.turn(this.velocity.x * dt, this.velocity.y * dt);
-      this.velocity.multiplyScalar(Math.exp(-s.friction * dt));
+      this.turn(this.velocity[0] * dt, this.velocity[1] * dt);
+      const f = Math.exp(-s.friction * dt);
+      this.velocity = [this.velocity[0] * f, this.velocity[1] * f];
       // Settle back once the spin has mostly died down, so a flick still gets to spin.
-      const speed = this.velocity.length();
+      const speed = Math.hypot(...this.velocity);
       const pull = s.settle * Math.max(0, 1 - speed / 6);
-      this.spin.slerp(new THREE.Quaternion(), 1 - Math.exp(-pull * dt));
+      this.spin = slerp(this.spin, identity(), 1 - Math.exp(-pull * dt));
     }
-    this.lean.lerp(this.leanTarget, 1 - Math.exp(-8 * dt));
-    const lean = new THREE.Quaternion().setFromEuler(
-      new THREE.Euler(this.lean.x * this.leanScale * rad, this.lean.y * this.leanScale * rad, 0, 'YXZ'));
+    const k = 1 - Math.exp(-8 * dt);
+    this.lean = [this.lean[0] + (this.leanTarget[0] - this.lean[0]) * k, this.lean[1] + (this.leanTarget[1] - this.lean[1]) * k];
+    const lean = yxz(this.lean[0] * this.leanScale * rad, this.lean[1] * this.leanScale * rad);
     // The sway: a figure of eight, side to side (s.sway degrees) while nodding at twice the rate,
     // as the CLI's sway video; eased in from nothing.
     this.time += dt;
     const grow = Math.min(1, this.time / swayEaseIn);
     this.sway = s.sway * grow * grow * (3 - 2 * grow);
     const phase = (2 * Math.PI * this.time) / swayPeriod;
-    const sway = new THREE.Quaternion().setFromEuler(
-      new THREE.Euler(this.sway * (9 / 28) * Math.sin(2 * phase) * rad, this.sway * Math.sin(phase) * rad, 0, 'YXZ'));
-    return this.out.multiplyQuaternions(sway, lean).multiply(this.spin);
+    const sway = yxz(this.sway * (9 / 28) * Math.sin(2 * phase) * rad, this.sway * Math.sin(phase) * rad);
+    return mul(mul(sway, lean), this.spin);
   }
 
   private turn(aboutX: number, aboutY: number) {
-    const q = new THREE.Quaternion().setFromAxisAngle(yAxis, aboutY)
-      .multiply(new THREE.Quaternion().setFromAxisAngle(xAxis, aboutX));
-    this.spin.premultiply(q).normalize();
+    const q = mul(axisAngle(0, 1, 0, aboutY), axisAngle(1, 0, 0, aboutX));
+    this.spin = normalize(mul(q, this.spin));
   }
 }
 

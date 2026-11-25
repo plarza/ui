@@ -14,6 +14,8 @@ import { resolve, settings, type ChromeSettings, type SettingName } from './chro
 import { defaultStudio, studios, type StudioName } from './chrome/studios';
 
 const outputs = ['png', 'video', 'glb', 'layout'] as const;
+/** Written only when asked for: the coarse layout the light renderer (web/ascii) loads. */
+const extras = ['lite'] as const;
 const { values, positionals } = parseArgs({
   allowPositionals: true,
   options: {
@@ -33,7 +35,7 @@ if (values.help || positionals.length !== 1) {
   console.log(`Usage: chrome-logo <file.svg> [options]
 
   --out <dir>           Where to write (default .)
-  --only <list>         Any of ${outputs.join(',')} (default all)
+  --only <list>         Any of ${[...outputs, ...extras].join(',')} (default ${outputs.join(',')})
   --size <px>           Square size of the still and videos (default 1080)
   --fps <n>             Video frame rate (default 60)
   --seconds <n>         Video length; it loops seamlessly (default 6)
@@ -87,6 +89,8 @@ const frame = async (q: THREE.Quaternion, still = false) =>
 
 if (only.has('layout'))
   await write(join(out, `${name}.chromelayout`), deflateRawSync(Buffer.from(await page.evaluate(() => (window as any).azaChrome.layout()), 'base64')));
+if (only.has('lite'))
+  await write(join(out, `${name}.chromelite`), deflateRawSync(Buffer.from(await page.evaluate(() => (window as any).azaChrome.lite()), 'base64')));
 if (only.has('glb'))
   await write(join(out, `${name}.glb`), Buffer.from(await page.evaluate(() => (window as any).azaChrome.glb()), 'base64'));
 if (only.has('png')) {

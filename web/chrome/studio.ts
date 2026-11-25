@@ -9,8 +9,8 @@
 import * as THREE from 'three';
 import { HDRLoader } from 'three/examples/jsm/loaders/HDRLoader.js';
 
-export const LO = -10;
-export const HI = 7;
+import { HI, LO } from './range';
+export { HI, LO };
 
 export interface Studio {
   width: number;

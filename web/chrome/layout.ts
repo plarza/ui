@@ -31,12 +31,18 @@ export interface Layout {
   loops: Uint32Array;
 }
 
-const rings = 40;
-/** Longest edge along a ring; rings are simplified as far as their neighbours allow. */
-const ringSpacing = 0.0045;
-const gridSpacing = 0.006;
+/** How finely the face is meshed: rings inward from the outline, the longest edge along a ring
+ *  (rings are simplified as far as their neighbours allow), and the grid across the face beyond. */
+export interface Density { rings: number; ringSpacing: number; gridSpacing: number; outline?: number }
 
-export function layout(outline: Ring[]): Layout {
+/** Smooth per pixel at any size: what ChromeLogo and the apps draw. */
+export const fine: Density = { rings: 40, ringSpacing: 0.0045, gridSpacing: 0.006 };
+/** For a logo drawn as characters, where a cell spans many of these triangles: about a twentieth,
+ *  the outline itself simplified to within `outline` (an SVG's curves come flattened finely). */
+export const coarse: Density = { rings: 10, ringSpacing: 0.016, gridSpacing: 0.03, outline: 0.0002 };
+
+export function layout(outline: Ring[], { rings, ringSpacing, gridSpacing, outline: tolerance }: Density = fine): Layout {
+  if (tolerance) outline = outline.map((ring) => densify(simplify(ring, tolerance), ringSpacing));
   const index = new Segments(outline);
   const xs: number[] = [], ys: number[] = [], ds: number[] = [], gxs: number[] = [], gys: number[] = [];
   const loops: number[] = [];

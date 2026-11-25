@@ -6,6 +6,7 @@ import type { Layout } from './layout';
 import { domeSoft, domeUnit } from './bevel';
 import { fieldLo, fieldSpan } from './layout';
 import { bevelAttribute, shape, triangles } from './mesh';
+import type { Quat } from './quat';
 import { shapeSettings, type ChromeSettings } from './settings';
 import type { Studio } from './studio';
 
@@ -35,8 +36,6 @@ export class ChromeScene {
   private motion = new THREE.Quaternion();
   private pmrem: THREE.PMREMGenerator;
   private still?: Still;
-  private ascii?: AsciiPass;
-  private size = new THREE.Vector2(1, 1);
   private samples = 0;
 
   constructor(canvas: HTMLCanvasElement | OffscreenCanvas, options: { preserveDrawingBuffer?: boolean; antialias?: boolean } = {}) {
@@ -103,13 +102,11 @@ export class ChromeScene {
   }
 
   /** The rotation from dragging, tilting and the gyro, applied on top of the rest pose. */
-  setMotion(q: THREE.Quaternion) {
-    this.motion.copy(q);
+  setMotion(q: Quat) {
+    this.motion.set(...q);
   }
 
   resize(width: number, height: number, pixelRatio = 1) {
-    this.size.set(width, height);
-    this.ascii?.resize(width, height, pixelRatio);
     this.renderer.setPixelRatio(pixelRatio);
     this.renderer.setSize(width, height, false);
     this.camera.aspect = width / height;
@@ -120,30 +117,8 @@ export class ChromeScene {
   render() {
     this.object.quaternion.multiplyQuaternions(this.motion, this.rest);
     this.samples = 0;
-    if (this.ascii) {
-      this.renderer.setRenderTarget(this.ascii.frame);
-      this.renderer.render(this.scene, this.camera);
-      this.ascii.show(this.renderer);
-      return;
-    }
     this.renderer.setRenderTarget(null);
     this.renderer.render(this.scene, this.camera);
-  }
-
-  /**
-   * Draw the logo as characters (null to stop): each cell of a grid becomes a character from
-   * `ramp` by its brightness, in the logo's own colour. `origin` is where the grid's lines cross
-   * the canvas, in CSS pixels, so the cells can line up with a grid drawn around it.
-   */
-  setAscii(options: AsciiOptions | null) {
-    this.ascii?.dispose();
-    this.ascii = options ? new AsciiPass(options) : undefined;
-    if (this.ascii) this.ascii.resize(this.size.x, this.size.y, this.renderer.getPixelRatio());
-  }
-
-  /** Where the character grid's lines cross the canvas, in CSS pixels. */
-  setAsciiOrigin(x: number, y: number) {
-    this.ascii?.setOrigin(x, y);
   }
 
   /**
@@ -153,8 +128,7 @@ export class ChromeScene {
    * their highlights step until many offset frames are averaged.
    */
   refine(): boolean {
-    // Characters are drawn a cell at a time: nothing to sharpen.
-    if (this.ascii || this.samples >= stillSamples) return false;
+    if (this.samples >= stillSamples) return false;
     const size = this.renderer.getDrawingBufferSize(new THREE.Vector2());
     if (!this.still || this.still.width !== size.x || this.still.height !== size.y) {
       this.still?.dispose();
@@ -177,7 +151,6 @@ export class ChromeScene {
 
   dispose() {
     this.still?.dispose();
-    this.ascii?.dispose();
     this.geometry.dispose();
     this.fieldUniform.value?.dispose();
     this.material.dispose();
@@ -281,132 +254,6 @@ class Still {
     this.quad.material = material;
     renderer.setRenderTarget(target);
     renderer.render(this.quad, this.camera);
-  }
-}
-
-export interface AsciiOptions {
-  /** A cell's size in CSS pixels. */
-  cell: [number, number];
-  /** The font the characters are drawn in: a CSS font family, and its weight. */
-  font: string;
-  weight?: number;
-  /** Font size in CSS pixels. */
-  fontSize: number;
-  /** Characters from darkest to brightest; the first is drawn for nothing. */
-  ramp: string;
-  /** Brightness below which a cell is left empty, so what is behind the canvas shows. */
-  threshold: number;
-  /** How much brighter the characters are than the render (1.25 lifts the chrome's greys). */
-  gain: number;
-  /** The colour a lit cell sits on, hiding what is behind it. */
-  background: string;
-}
-
-/**
- * The logo as characters: the scene drawn at CSS resolution into a target, then a pass over the
- * canvas that picks each cell's character by its brightness (tone-mapped as the canvas would be)
- * and draws it from an atlas, in the cell's colour times `gain`. Lit cells are opaque, on
- * `background`; the rest are transparent.
- */
-class AsciiPass {
-  frame = new THREE.WebGLRenderTarget(1, 1, { type: THREE.HalfFloatType });
-  private atlas?: THREE.CanvasTexture;
-  private quad = new THREE.Mesh(new THREE.PlaneGeometry(2, 2));
-  private camera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
-  private ratio = 1;
-  private material = new THREE.ShaderMaterial({
-    uniforms: {
-      frame: { value: null }, atlas: { value: null }, glyphs: { value: 1 }, cell: { value: new THREE.Vector2() },
-      origin: { value: new THREE.Vector2() }, resolution: { value: new THREE.Vector2() }, threshold: { value: 0 },
-      gain: { value: 1 }, background: { value: new THREE.Color() }, toneMappingExposure: { value: 1 },
-    },
-    vertexShader: 'void main() { gl_Position = vec4(position.xy, 0.0, 1.0); }',
-    fragmentShader: `
-      #include <tonemapping_pars_fragment>
-      uniform sampler2D frame, atlas;
-      uniform float glyphs, threshold, gain;
-      uniform vec2 cell, origin, resolution;
-      uniform vec3 background;
-      // The render's colour at p (canvas pixels from the top left), as the canvas would show it.
-      vec3 display(vec2 p) {
-        vec4 c = texture2D(frame, vec2(p.x, resolution.y - p.y) / resolution);
-        if (c.a <= 0.0) return vec3(0.0);
-        return sRGBTransferOETF(vec4(NeutralToneMapping(c.rgb / c.a), 1.0)).rgb * c.a;
-      }
-      void main() {
-        // Canvas pixels from the top left, the cell this pixel is in, and where in it.
-        vec2 p = vec2(gl_FragCoord.x, resolution.y - gl_FragCoord.y);
-        vec2 at = (p - origin) / cell, index = floor(at), inside = at - index;
-        vec2 centre = origin + (index + 0.5) * cell;
-        // The cell's colour: four samples across it.
-        vec3 c = 0.25 * (display(centre + cell * vec2(-0.25, -0.25)) + display(centre + cell * vec2(0.25, -0.25))
-          + display(centre + cell * vec2(-0.25, 0.25)) + display(centre + cell * vec2(0.25, 0.25)));
-        float l = dot(c, vec3(0.2126, 0.7152, 0.0722));
-        if (l < threshold) { gl_FragColor = vec4(0.0); return; }
-        float glyph = min(floor(l * glyphs), glyphs - 1.0);
-        float ink = texture2D(atlas, vec2((glyph + inside.x) / glyphs, 1.0 - inside.y)).a;
-        gl_FragColor = vec4(mix(background, min(c * gain, vec3(1.0)), ink), 1.0);
-      }`,
-    depthTest: false, depthWrite: false, blending: THREE.NoBlending, toneMapped: false,
-  });
-
-  constructor(private options: AsciiOptions) {
-    this.quad.material = this.material;
-    this.quad.frustumCulled = false;
-    const u = this.material.uniforms;
-    u.glyphs.value = options.ramp.length;
-    u.threshold.value = options.threshold;
-    u.gain.value = options.gain;
-    // As written, in sRGB: the pass mixes in the colours the canvas shows.
-    u.background.value = new THREE.Color().setStyle(options.background, THREE.LinearSRGBColorSpace);
-  }
-
-  resize(width: number, height: number, ratio: number) {
-    this.ratio = ratio;
-    // The scene at CSS resolution: a cell is several of its pixels, which is all the pass reads.
-    this.frame.setSize(Math.max(1, Math.round(width)), Math.max(1, Math.round(height)));
-    const u = this.material.uniforms;
-    u.cell.value.set(this.options.cell[0] * ratio, this.options.cell[1] * ratio);
-    u.resolution.value.set(Math.round(width * ratio), Math.round(height * ratio));
-    this.drawAtlas();
-  }
-
-  setOrigin(x: number, y: number) {
-    this.material.uniforms.origin.value.set(x * this.ratio, y * this.ratio);
-  }
-
-  show(renderer: THREE.WebGLRenderer) {
-    const u = this.material.uniforms;
-    u.frame.value = this.frame.texture;
-    u.toneMappingExposure.value = renderer.toneMappingExposure;
-    renderer.setRenderTarget(null);
-    renderer.render(this.quad, this.camera);
-  }
-
-  dispose() {
-    this.frame.dispose();
-    this.atlas?.dispose();
-    this.quad.geometry.dispose();
-    this.material.dispose();
-  }
-
-  /** Every character of the ramp in a row, each in a cell, drawn at the canvas's resolution. */
-  private drawAtlas() {
-    const { ramp, font, weight = 400, fontSize, cell } = this.options;
-    const w = Math.ceil(cell[0] * this.ratio), h = Math.ceil(cell[1] * this.ratio);
-    const canvas = document.createElement('canvas');
-    canvas.width = w * ramp.length;
-    canvas.height = h;
-    const g = canvas.getContext('2d')!;
-    g.font = `${weight} ${fontSize * this.ratio}px ${font}`;
-    g.textBaseline = 'top';
-    g.fillStyle = '#fff';
-    [...ramp].forEach((ch, i) => g.fillText(ch, i * w, 0));
-    this.atlas?.dispose();
-    this.atlas = new THREE.CanvasTexture(canvas);
-    this.atlas.minFilter = this.atlas.magFilter = THREE.LinearFilter;
-    this.atlas.generateMipmaps = false;
-    this.material.uniforms.atlas.value = this.atlas;
   }
 }
 

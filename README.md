@@ -118,7 +118,7 @@ Jarvis's `/v1/chat` is the model.
 
 ## Chrome logo
 
-Any SVG as a chrome object: a rounded rim, a bevel and a flat face, lit by a studio. It comes as a SwiftUI view, a Svelte component, and a CLI that renders stills and videos. Drag it and it keeps turning, then settles; it leans toward the pointer, and on phones with the phone. With `sway` set (degrees) it also rocks on its own, as the CLI's sway video does, easing in from rest. With `ascii` (Svelte) it is drawn as characters: each cell of a grid takes a character by its brightness, in its own colour, on a grid that lines up with one drawn around it.
+Any SVG as a chrome object: a rounded rim, a bevel and a flat face, lit by a studio. It comes as a SwiftUI view, a Svelte component, and a CLI that renders stills and videos. Drag it and it keeps turning, then settles; it leans toward the pointer, and on phones with the phone. With `sway` set (degrees) it also rocks on its own, as the CLI's sway video does, easing in from rest.
 
 ```swift
 ChromeLogo()                                  // the aza mark
@@ -163,6 +163,25 @@ The bevel, settings and motion exist twice, in `web/chrome/*.ts` and `Sources/Az
 ```sh
 bun web/cli.ts assets/aza.svg --only layout --out Sources/AzaUI/Resources
 ```
+
+### As characters, at once
+
+`@aza/ui/ascii` draws the logo as characters over a whole page, without three.js: about 25 KB of script, and the first frame comes as soon as its two files arrive.
+
+```ts
+import { AsciiChrome } from '@aza/ui/ascii';
+
+new AsciiChrome({
+  canvas, box,                         // a canvas over the page; the element the logo fills
+  layout: '/logo.chromelite',          // bun web/cli.ts logo.svg --only lite
+  studio: '/neon.avif',                // a studio (Sources/AzaUI/Resources/Studios)
+  glyphs, ramp: ' .:;+*?%S#@',         // the characters, as outlines in font units
+  cell: [6.6, 12.65], fontSize: 11, page: '#050506', field: ['#0c0c0e', '#26262c'],
+  settings: { sway: 12 },
+});
+```
+
+A `.chromelite` is the coarse layout (about a twentieth of ChromeLogo's points, 50 KB for Sauron's mark) with its triangles, quantised and compressed; the browser only bevels it. Each frame is three passes: the logo into a target the size of its box, shaded as ChromeScene shades it (the bevel per pixel, the studio decoded to light and blurred by mipmap); one pixel per character cell, picking a character by brightness or, where the logo is dark, from a noise field; and the screen, two texture reads a pixel, the characters drawn from their outlines at the screen's exact cell size. The motion is ChromeLogo's (`web/chrome/motion.ts`, now plain maths).
 
 ## Building an app
 

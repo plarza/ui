@@ -6,13 +6,16 @@ import { bevel, dome } from './bevel';
 import type { Layout } from './layout';
 import type { ChromeSettings } from './settings';
 
-function wallCount(l: Layout) {
+/** What the mesh needs of a layout: its points, triangles and outline, not the dome's field. */
+export type MeshLayout = Pick<Layout, 'x' | 'y' | 'd' | 'gx' | 'gy' | 'u' | 'ux' | 'uy' | 'triangles' | 'loops'>;
+
+function wallCount(l: MeshLayout) {
   let n = 0;
   for (let i = 1; i < l.loops.length; i += 2) n += l.loops[i];
   return n;
 }
 
-export function triangles(l: Layout): Uint32Array {
+export function triangles(l: MeshLayout): Uint32Array {
   const n = l.x.length, front = l.triangles.length;
   const index = new Uint32Array(front * 2 + wallCount(l) * 6);
   index.set(l.triangles);
@@ -38,7 +41,7 @@ export function triangles(l: Layout): Uint32Array {
   return index;
 }
 
-export function shape(l: Layout, s: ChromeSettings, position?: Float32Array, normal?: Float32Array) {
+export function shape(l: MeshLayout, s: ChromeSettings, position?: Float32Array, normal?: Float32Array) {
   const n = l.x.length, size = (2 * n + 2 * wallCount(l)) * 3;
   position ??= new Float32Array(size);
   normal ??= new Float32Array(size);
@@ -72,7 +75,7 @@ export function shape(l: Layout, s: ChromeSettings, position?: Float32Array, nor
 
 /** Per vertex: distance inside the outline, inward direction, and which face (1 front, -1 back, 0 wall).
  *  The renderer's shader evaluates the bevel per pixel from these, so shading never shows facets. */
-export function bevelAttribute(l: Layout): Float32Array {
+export function bevelAttribute(l: MeshLayout): Float32Array {
   const n = l.x.length;
   const out = new Float32Array((2 * n + 2 * wallCount(l)) * 4);
   for (let i = 0; i < n; i++) {

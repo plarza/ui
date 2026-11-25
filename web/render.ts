@@ -3,7 +3,8 @@
 
 import * as THREE from 'three';
 import { GLTFExporter } from 'three/examples/jsm/exporters/GLTFExporter.js';
-import { encode, layout as makeLayout, type Layout } from './chrome/layout';
+import { coarse, encode, layout as makeLayout, type Layout } from './chrome/layout';
+import { encodeLite } from './chrome/lite';
 import { outline } from './chrome/outline';
 import { ChromeScene } from './chrome/scene';
 import type { ChromeSettings } from './chrome/settings';
@@ -11,6 +12,7 @@ import { load } from './chrome/studio';
 
 let scene: ChromeScene;
 let layout: Layout;
+let rings: ReturnType<typeof outline>;
 let size = 0, supersample = 1;
 
 const base64 = (bytes: Uint8Array) => {
@@ -25,7 +27,8 @@ const base64 = (bytes: Uint8Array) => {
     const canvas = document.querySelector('canvas')!;
     scene = new ChromeScene(canvas, { preserveDrawingBuffer: true });
     scene.setStudio(await load(Uint8Array.from(atob(studio), (c) => c.charCodeAt(0)).buffer));
-    layout = makeLayout(outline(svg));
+    rings = outline(svg);
+    layout = makeLayout(rings);
     scene.setLayout(layout);
     scene.setSettings(settings);
     // No more supersampling than the GPU can draw: past its largest canvas it draws only a corner.
@@ -42,7 +45,7 @@ const base64 = (bytes: Uint8Array) => {
    * pixel, which smooths the mirror's highlights that a larger frame alone leaves stepped.
    */
   frame(rotation: [number, number, number, number], still = false) {
-    scene.setMotion(new THREE.Quaternion(...rotation));
+    scene.setMotion(rotation);
     const ss = still ? 1 : supersample;
     scene.resize(size * ss, size * ss, 1);
     scene.render();
@@ -69,6 +72,11 @@ const base64 = (bytes: Uint8Array) => {
 
   layout() {
     return base64(encode(layout));
+  },
+
+  /** The coarse layout for the light renderer (web/ascii), compact. */
+  lite() {
+    return base64(encodeLite(makeLayout(rings, coarse)));
   },
 
   async glb() {

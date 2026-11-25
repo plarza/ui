@@ -9,6 +9,9 @@
     ".": {
       "svelte": "./web/index.ts",
       "default": "./web/index.ts"
+    },
+    "./ascii": {
+      "default": "./web/ascii.ts"
     }
   },
   "bin": {

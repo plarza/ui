@@ -1,5 +1,5 @@
 export { default as ChromeLogo } from './ChromeLogo.svelte';
-export { ChromeScene, type AsciiOptions } from './chrome/scene';
+export { ChromeScene } from './chrome/scene';
 export { Motion } from './chrome/motion';
 export { outline } from './chrome/outline';
 export { layout, encode, type Layout } from './chrome/layout';
