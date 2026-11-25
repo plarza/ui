@@ -12,6 +12,10 @@ import type { Studio } from './studio';
 const rad = Math.PI / 180;
 /** Radius of the sphere the camera keeps in view, in logo units. */
 const fit = 0.6;
+/** Frames averaged into a still, each shifted by a fraction of a pixel. */
+const stillSamples = 16;
+/** Frames in before the still replaces the moving frame (multisampled) on the canvas. */
+const stillShown = 4;
 
 export class ChromeScene {
   readonly renderer: THREE.WebGLRenderer;
@@ -30,6 +34,8 @@ export class ChromeScene {
   private rest = new THREE.Quaternion();
   private motion = new THREE.Quaternion();
   private pmrem: THREE.PMREMGenerator;
+  private still?: Still;
+  private samples = 0;
 
   constructor(canvas: HTMLCanvasElement | OffscreenCanvas, options: { preserveDrawingBuffer?: boolean } = {}) {
     this.renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true, ...options });
@@ -106,9 +112,35 @@ export class ChromeScene {
     this.frame();
   }
 
+  /** A frame as it moves: straight to the canvas, multisampled. A still starts again after it. */
   render() {
     this.object.quaternion.multiplyQuaternions(this.motion, this.rest);
+    this.samples = 0;
+    this.renderer.setRenderTarget(null);
     this.renderer.render(this.scene, this.camera);
+  }
+
+  /**
+   * While it stands still, one more frame folded into the picture on the canvas, shifted by a
+   * fraction of a pixel; false once all of them are in. Multisampling smooths only the outline:
+   * the rim, groove and bevel turn the normal within a pixel, and a mirror shows every turn, so
+   * their highlights step until many offset frames are averaged.
+   */
+  refine(): boolean {
+    if (this.samples >= stillSamples) return false;
+    const size = this.renderer.getDrawingBufferSize(new THREE.Vector2());
+    if (!this.still || this.still.width !== size.x || this.still.height !== size.y) {
+      this.still?.dispose();
+      this.still = new Still(size.x, size.y);
+    }
+    const n = this.samples++;
+    this.camera.setViewOffset(size.x, size.y, halton(n + 1, 2) - 0.5, halton(n + 1, 3) - 0.5, size.x, size.y);
+    this.renderer.setRenderTarget(this.still.frame);
+    this.renderer.render(this.scene, this.camera);
+    this.camera.clearViewOffset();
+    this.still.fold(this.renderer, 1 / (n + 1));
+    if (this.samples >= stillShown) this.still.show(this.renderer);
+    return true;
   }
 
   /** The mesh, for export. */
@@ -117,6 +149,7 @@ export class ChromeScene {
   }
 
   dispose() {
+    this.still?.dispose();
     this.geometry.dispose();
     this.fieldUniform.value?.dispose();
     this.material.dispose();
@@ -136,6 +169,90 @@ export class ChromeScene {
     this.camera.far = distance * 10;
     this.camera.lookAt(0, 0, 0);
     this.camera.updateProjectionMatrix();
+  }
+}
+
+/** The n-th point of the Halton sequence in a base: offsets that cover a pixel evenly. */
+function halton(n: number, base: number) {
+  let r = 0, f = 1;
+  for (; n > 0; n = Math.floor(n / base)) r += (f /= base) * (n % base);
+  return r;
+}
+
+/**
+ * A still built up frame by frame: each frame (linear light, premultiplied by its coverage) is
+ * tone-mapped as the canvas would be and averaged into the sum, which goes to the canvas in sRGB.
+ * Tone-mapping each frame before averaging keeps the still as bright as a moving frame.
+ */
+class Still {
+  readonly frame: THREE.WebGLRenderTarget;
+  private sum: THREE.WebGLRenderTarget;
+  private next: THREE.WebGLRenderTarget;
+  private quad = new THREE.Mesh(new THREE.PlaneGeometry(2, 2));
+  private camera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
+  private folding = new THREE.ShaderMaterial({
+    uniforms: { frame: { value: null }, sum: { value: null }, weight: { value: 1 }, toneMappingExposure: { value: 1 } },
+    vertexShader: 'varying vec2 vUv; void main() { vUv = uv; gl_Position = vec4(position.xy, 0.0, 1.0); }',
+    fragmentShader: `
+      #include <tonemapping_pars_fragment>
+      uniform sampler2D frame, sum;
+      uniform float weight;
+      varying vec2 vUv;
+      void main() {
+        vec4 c = texture2D(frame, vUv);
+        if (c.a > 0.0) c.rgb = NeutralToneMapping(c.rgb / c.a) * c.a;
+        gl_FragColor = mix(texture2D(sum, vUv), c, weight);
+      }`,
+    depthTest: false, depthWrite: false, blending: THREE.NoBlending, toneMapped: false,
+  });
+  private showing = new THREE.ShaderMaterial({
+    uniforms: { sum: { value: null } },
+    vertexShader: 'varying vec2 vUv; void main() { vUv = uv; gl_Position = vec4(position.xy, 0.0, 1.0); }',
+    fragmentShader: `
+      uniform sampler2D sum;
+      varying vec2 vUv;
+      void main() {
+        vec4 c = texture2D(sum, vUv);
+        if (c.a > 0.0) c.rgb = sRGBTransferOETF(vec4(c.rgb / c.a, 1.0)).rgb * c.a;
+        gl_FragColor = c;
+      }`,
+    depthTest: false, depthWrite: false, blending: THREE.NoBlending, toneMapped: false,
+  });
+
+  constructor(readonly width: number, readonly height: number) {
+    const target = (depthBuffer: boolean) => new THREE.WebGLRenderTarget(width, height, { type: THREE.HalfFloatType, depthBuffer });
+    this.frame = target(true);
+    this.sum = target(false);
+    this.next = target(false);
+    this.quad.frustumCulled = false;
+  }
+
+  fold(renderer: THREE.WebGLRenderer, weight: number) {
+    this.folding.uniforms.frame.value = this.frame.texture;
+    this.folding.uniforms.sum.value = this.sum.texture;
+    this.folding.uniforms.weight.value = weight;
+    // three sets the exposure only when a material is first drawn; this one follows the setting.
+    this.folding.uniforms.toneMappingExposure.value = renderer.toneMappingExposure;
+    this.draw(renderer, this.folding, this.next);
+    [this.sum, this.next] = [this.next, this.sum];
+  }
+
+  show(renderer: THREE.WebGLRenderer) {
+    this.showing.uniforms.sum.value = this.sum.texture;
+    this.draw(renderer, this.showing, null);
+  }
+
+  dispose() {
+    for (const t of [this.frame, this.sum, this.next]) t.dispose();
+    this.quad.geometry.dispose();
+    this.folding.dispose();
+    this.showing.dispose();
+  }
+
+  private draw(renderer: THREE.WebGLRenderer, material: THREE.Material, target: THREE.WebGLRenderTarget | null) {
+    this.quad.material = material;
+    renderer.setRenderTarget(target);
+    renderer.render(this.quad, this.camera);
   }
 }
 
@@ -193,9 +310,14 @@ function chromeMaterial(uniforms: Record<string, { value: number }>, field: { va
             return normalize(vec2(-(chromeRecess - chromeGroove) * chromeCurve * pow(t, chromeCurve - 1.0) / chromeBevelWidth, 1.0));
           }
           return vec2(0.0, 1.0);
+        }
+        // The slope averaged over the pixel, so a frame in motion steps less where it turns sharply.
+        vec2 chromeSlopeOverPixel(float d) {
+          float w = fwidth(d);
+          return chromeSlope(d - 0.375 * w) + chromeSlope(d - 0.125 * w) + chromeSlope(d + 0.125 * w) + chromeSlope(d + 0.375 * w);
         }`)
       .replace('#include <normal_fragment_begin>', `#include <normal_fragment_begin>
-        vec2 chromeS = chromeSlope(vChromeD);
+        vec2 chromeS = chromeSlopeOverPixel(vChromeD);
         // The dome leans the bevel's normal by its slope; the walls (no face direction) take none.
         vec3 chromeLeanBy = vec3(0.0);
         if (dot(vChromeZ, vChromeZ) > 0.0) {

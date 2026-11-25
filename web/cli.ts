@@ -82,15 +82,15 @@ const info = await page.evaluate(([svg, s, size, ss, studio]) => (window as any)
   [await Bun.file(file).text(), s, size, supersample, Buffer.from(studioBytes).toString('base64')] as const);
 console.log(`${name}: ${info.points} points, ${info.triangles} triangles per face`);
 
-const frame = async (q: THREE.Quaternion) =>
-  Buffer.from(await page.evaluate((r) => (window as any).azaChrome.frame(r), [q.x, q.y, q.z, q.w]), 'base64');
+const frame = async (q: THREE.Quaternion, still = false) =>
+  Buffer.from(await page.evaluate(([r, still]) => (window as any).azaChrome.frame(r, still), [[q.x, q.y, q.z, q.w], still] as const), 'base64');
 
 if (only.has('layout'))
   await write(join(out, `${name}.chromelayout`), deflateRawSync(Buffer.from(await page.evaluate(() => (window as any).azaChrome.layout()), 'base64')));
 if (only.has('glb'))
   await write(join(out, `${name}.glb`), Buffer.from(await page.evaluate(() => (window as any).azaChrome.glb()), 'base64'));
 if (only.has('png')) {
-  const pixels = await frame(new THREE.Quaternion());
+  const pixels = await frame(new THREE.Quaternion(), true);
   await ffmpeg([], ['-frames:v', '1', join(out, `${name}.png`)], pixels);
 }
 if (only.has('video')) await video(frame);

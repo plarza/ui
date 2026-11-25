@@ -55,15 +55,19 @@ export function layout(outline: Ring[]): Layout {
       for (let i = first; i < xs.length; i++) { gxs[i] = -gxs[i]; gys[i] = -gys[i]; }
   }
 
-  const add = (x: number, y: number) => {
+  // A point and its distance from the outline: its own, or on a ring the ring's.
+  const add = (x: number, y: number, ring?: number) => {
     const [d, gx, gy] = index.nearest(x, y);
-    xs.push(x); ys.push(y); ds.push(d); gxs.push(gx); gys.push(gy);
+    xs.push(x); ys.push(y); ds.push(ring ?? d); gxs.push(gx); gys.push(gy);
     return xs.length - 1;
   };
 
   // Rings inward, closer together near the edge where the rim curves fastest. Each ring is an
   // exact offset of the outline, simplified only as far as keeps it clear of its neighbours,
-  // and is a constraint: triangles then run ring to ring, so the bevel never zigzags.
+  // and is a constraint: triangles then run ring to ring, so the bevel never zigzags. Every point
+  // on a ring takes the ring's distance, not its own: one partway along a simplified stretch sits
+  // up to a fifth of the gap nearer the outline, and the rim and groove, a few rings wide, would
+  // wobble from point to point (a mirror shows it as a dotted line).
   const edges: [number, number][] = [];
   for (let i = 0; i < loops.length; i += 2)
     for (let k = 0; k < loops[i + 1]; k++) edges.push([loops[i] + k, loops[i] + ((k + 1) % loops[i + 1])]);
@@ -78,7 +82,7 @@ export function layout(outline: Ring[]): Layout {
       const simple = densify(simplify(ring, tolerance), ringSpacing);
       if (simple.length < 6) continue;
       const first = xs.length, n = simple.length / 2;
-      for (let i = 0; i < simple.length; i += 2) add(simple[i], simple[i + 1]);
+      for (let i = 0; i < simple.length; i += 2) add(simple[i], simple[i + 1], d);
       for (let i = 0; i < n; i++) edges.push([first + i, first + ((i + 1) % n)]);
     }
   }

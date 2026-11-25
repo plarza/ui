@@ -80,9 +80,10 @@
     const size = () => {
       const r = box.getBoundingClientRect();
       const w = Math.max(1, r.width), h = Math.max(1, r.height);
-      // Draw at twice the screen's resolution when the pixel budget allows; the browser averages it
-      // down, which smooths the thin rim highlights that multisampling alone leaves jagged.
-      s.resize(w, h, Math.max(Math.min(devicePixelRatio, 2), Math.min(2 * devicePixelRatio, Math.sqrt(maxPixels / (w * h)))));
+      // Draw at exactly twice the screen's resolution when the pixel budget allows, else at it: the
+      // browser shrinks the canvas bilinearly, which averages every pixel only at exactly 2:1.
+      const screen = Math.min(devicePixelRatio, 2);
+      s.resize(w, h, 4 * screen * screen * w * h <= maxPixels ? 2 * screen : screen);
       dirty = true;
     };
     const resize = new ResizeObserver(size);
@@ -99,6 +100,9 @@
         s.setMotion(motion.step(dt, resolved));
         s.render();
         dirty = false;
+      } else {
+        // Standing still: sharpen it, a frame at a time, until it's done.
+        s.refine();
       }
     };
     frame = requestAnimationFrame(tick);
