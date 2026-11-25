@@ -34,6 +34,7 @@ export const settings = {
   settle: { label: 'Settle', group: 'Motion', value: 1.2, min: 0, max: 10, step: 0.1 },
   cursorTilt: { label: 'Cursor tilt', group: 'Motion', value: 12, min: 0, max: 45, step: 0.5 },
   gyroTilt: { label: 'Gyro tilt', group: 'Motion', value: 20, min: 0, max: 60, step: 0.5 },
+  sway: { label: 'Sway', group: 'Motion', value: 0, min: 0, max: 45, step: 0.5 },
 } satisfies Record<string, Setting>;
 
 export type SettingName = keyof typeof settings;

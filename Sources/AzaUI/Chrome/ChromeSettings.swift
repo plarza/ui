@@ -37,6 +37,8 @@ public struct ChromeSettings: Equatable, Sendable {
     public var cursorTilt: Float = 12
     /// Degrees it leans with the phone.
     public var gyroTilt: Float = 20
+    /// Degrees it sways side to side on its own, nodding at twice the rate; 0 keeps it still.
+    public var sway: Float = 0
 
     public init() {}
 

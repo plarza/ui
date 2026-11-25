@@ -37,7 +37,9 @@
   let lit = $state(false);
   const ready = $derived(shaped && lit);
   const motion = new Motion();
-  const maxPixels = 6e6;
+  // The canvas's pixel budget: twice the screen's resolution fits a retina laptop's logo, so its
+  // highlights stay smooth in motion; past it the canvas is drawn at the screen's resolution.
+  const maxPixels = 16e6;
   const resolved = $derived(resolve(settings));
   let dirty = true;
 
@@ -73,17 +75,21 @@
   });
 
   onMount(() => {
-    const s = new ChromeScene(canvas);
+    // Twice the screen's resolution, where it fits, and then no multisampling: each pixel already
+    // averages four, and multisampling a canvas that large would take hundreds of megabytes.
+    const screen = Math.min(devicePixelRatio, 3);
+    const fits = (w: number, h: number) => 4 * screen * screen * w * h <= maxPixels;
+    const first = box.getBoundingClientRect();
+    const s = new ChromeScene(canvas, { antialias: !fits(Math.max(1, first.width), Math.max(1, first.height)) });
     scene = s;
     let visible = true, frame = 0, last = performance.now();
 
     const size = () => {
       const r = box.getBoundingClientRect();
       const w = Math.max(1, r.width), h = Math.max(1, r.height);
-      // Draw at exactly twice the screen's resolution when the pixel budget allows, else at it: the
-      // browser shrinks the canvas bilinearly, which averages every pixel only at exactly 2:1.
-      const screen = Math.min(devicePixelRatio, 2);
-      s.resize(w, h, 4 * screen * screen * w * h <= maxPixels ? 2 * screen : screen);
+      // Exactly twice, never between: the browser shrinks the canvas bilinearly, which averages
+      // every pixel only at 2:1.
+      s.resize(w, h, fits(w, h) ? 2 * screen : screen);
       dirty = true;
     };
     const resize = new ResizeObserver(size);

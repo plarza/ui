@@ -1,11 +1,16 @@
 // How the logo moves: drag to spin it, and it keeps spinning and slows (friction), then eases
-// back to rest (settle). On top of that it leans toward the cursor, or with the phone (gyro).
+// back to rest (settle). On top of that it leans toward the cursor, or with the phone (gyro), and
+// it can sway on its own, as the CLI's sway video does.
 // AzaUI's ChromeLogo.swift mirrors this; change both together.
 
 import * as THREE from 'three';
 import type { ChromeSettings } from './settings';
 
 const rad = Math.PI / 180;
+/** One sway, side to side and back, in seconds; it nods twice in that time. */
+const swayPeriod = 10;
+/** Seconds the sway takes to grow from nothing, so the first frame is the rest pose. */
+const swayEaseIn = 3;
 const yAxis = new THREE.Vector3(0, 1, 0), xAxis = new THREE.Vector3(1, 0, 0);
 
 export class Motion {
@@ -21,11 +26,14 @@ export class Motion {
   private leanScale = 0;
   private gyroRest?: THREE.Vector2;
   private out = new THREE.Quaternion();
+  /** Seconds since the first step, and the sway at the last one, in degrees. */
+  private time = 0;
+  private sway = 0;
 
   /** True while the logo is still moving, so a renderer can stop drawing when it's still. */
   get moving() {
     const turned = 1 - Math.abs(this.spin.w);
-    return this.dragging || this.velocity.lengthSq() > 1e-6 || turned > 1e-7 || this.lean.distanceToSquared(this.leanTarget) > 1e-7;
+    return this.sway > 0 || this.dragging || this.velocity.lengthSq() > 1e-6 || turned > 1e-7 || this.lean.distanceToSquared(this.leanTarget) > 1e-7;
   }
 
   start() {
@@ -87,7 +95,15 @@ export class Motion {
     this.lean.lerp(this.leanTarget, 1 - Math.exp(-8 * dt));
     const lean = new THREE.Quaternion().setFromEuler(
       new THREE.Euler(this.lean.x * this.leanScale * rad, this.lean.y * this.leanScale * rad, 0, 'YXZ'));
-    return this.out.multiplyQuaternions(lean, this.spin);
+    // The sway: a figure of eight, side to side (s.sway degrees) while nodding at twice the rate,
+    // as the CLI's sway video; eased in from nothing.
+    this.time += dt;
+    const grow = Math.min(1, this.time / swayEaseIn);
+    this.sway = s.sway * grow * grow * (3 - 2 * grow);
+    const phase = (2 * Math.PI * this.time) / swayPeriod;
+    const sway = new THREE.Quaternion().setFromEuler(
+      new THREE.Euler(this.sway * (9 / 28) * Math.sin(2 * phase) * rad, this.sway * Math.sin(phase) * rad, 0, 'YXZ'));
+    return this.out.multiplyQuaternions(sway, lean).multiply(this.spin);
   }
 
   private turn(aboutX: number, aboutY: number) {

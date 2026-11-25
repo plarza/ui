@@ -37,7 +37,7 @@ export class ChromeScene {
   private still?: Still;
   private samples = 0;
 
-  constructor(canvas: HTMLCanvasElement | OffscreenCanvas, options: { preserveDrawingBuffer?: boolean } = {}) {
+  constructor(canvas: HTMLCanvasElement | OffscreenCanvas, options: { preserveDrawingBuffer?: boolean; antialias?: boolean } = {}) {
     this.renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true, ...options });
     this.renderer.setClearColor(0x000000, 0);
     this.renderer.toneMapping = THREE.NeutralToneMapping;

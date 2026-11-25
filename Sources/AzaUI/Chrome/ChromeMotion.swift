@@ -2,7 +2,8 @@ import Foundation
 import simd
 
 /// How the logo moves: drag to spin it, and it keeps spinning and slows (friction), then eases back
-/// to rest (settle). On top of that it leans toward the pointer, or with the phone.
+/// to rest (settle). On top of that it leans toward the pointer, or with the phone, and it can sway
+/// on its own, as the CLI's sway video does.
 /// Mirrors web/chrome/motion.ts; change both together.
 final class ChromeMotion {
     private var spin = simd_quatf(ix: 0, iy: 0, iz: 0, r: 1)
@@ -13,6 +14,13 @@ final class ChromeMotion {
     private var leanTarget: SIMD2<Float> = .zero
     private var leanScale: Float = 0
     private var gyroRest: SIMD2<Float>?
+    /// Seconds since the first step, and the sway at the last one, in degrees.
+    private var time: Float = 0
+    private(set) var sway: Float = 0
+    /// One sway, side to side and back, in seconds; it nods twice in that time.
+    private let swayPeriod: Float = 10
+    /// Seconds the sway takes to grow from nothing, so the first frame is the rest pose.
+    private let swayEaseIn: Float = 3
 
     func start() {
         dragging = true
@@ -66,7 +74,15 @@ final class ChromeMotion {
         let rad = Float.pi / 180
         let leanRotation = simd_quatf(angle: lean.y * leanScale * rad, axis: [0, 1, 0])
             * simd_quatf(angle: lean.x * leanScale * rad, axis: [1, 0, 0])
-        return leanRotation * spin
+        // The sway: a figure of eight, side to side (s.sway degrees) while nodding at twice the
+        // rate, as the CLI's sway video; eased in from nothing.
+        time += dt
+        let grow = min(1, time / swayEaseIn)
+        sway = s.sway * grow * grow * (3 - 2 * grow)
+        let phase = 2 * Float.pi * time / swayPeriod
+        let swayRotation = simd_quatf(angle: sway * sin(phase) * rad, axis: [0, 1, 0])
+            * simd_quatf(angle: sway * (9 / 28) * sin(2 * phase) * rad, axis: [1, 0, 0])
+        return swayRotation * leanRotation * spin
     }
 
     private func turn(aboutX: Float, aboutY: Float) {
