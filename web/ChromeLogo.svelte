@@ -1,14 +1,14 @@
 <!--
   An SVG as a polished chrome object you can spin. Drag it and it keeps turning, then settles;
   it leans toward the cursor, and on phones with the phone. Any filled SVG works; strokes
-  become outlines. Without `svg` it shows the aza mark.
+  become outlines. Without `svg` it shows the aza mark. With `ascii` it is drawn as characters.
 -->
 <script lang="ts">
   import { onMount } from 'svelte';
   import aza from '../assets/aza.svg?raw';
   import { build } from './chrome/build';
   import { Motion } from './chrome/motion';
-  import { ChromeScene } from './chrome/scene';
+  import { ChromeScene, type AsciiOptions } from './chrome/scene';
   import { resolve, type ChromeSettings } from './chrome/settings';
   import { load } from './chrome/studio';
   import { defaultStudio, studios, type StudioName } from './chrome/studios';
@@ -23,19 +23,24 @@
     studio?: StudioName | (string & {});
     /** Drag, cursor and gyro. Off gives a still. */
     interactive?: boolean;
+    /** Draw it as characters, on a grid whose lines cross at the page's top left, so a grid of
+     *  characters drawn behind it lines up. */
+    ascii?: AsciiOptions;
     label?: string;
     class?: string;
     style?: string;
   }
 
-  let { svg = aza, settings = {}, studio = defaultStudio, interactive = true, label = 'Logo', class: className = '', style = '' }: Props = $props();
+  let { svg = aza, settings = {}, studio = defaultStudio, interactive = true, ascii, label = 'Logo', class: className = '', style = '' }: Props = $props();
 
   let box: HTMLDivElement;
   let canvas: HTMLCanvasElement;
   let scene: ChromeScene | undefined = $state();
   let shaped = $state(false);
   let lit = $state(false);
-  const ready = $derived(shaped && lit);
+  // With characters, their font too: the atlas is drawn from it.
+  let lettered = $state(false);
+  const ready = $derived(shaped && lit && (!ascii || lettered));
   const motion = new Motion();
   // The canvas's pixel budget: twice the screen's resolution fits a retina laptop's logo, so its
   // highlights stay smooth in motion; past it the canvas is drawn at the screen's resolution.
@@ -92,8 +97,25 @@
       s.resize(w, h, fits(w, h) ? 2 * screen : screen);
       dirty = true;
     };
-    const resize = new ResizeObserver(size);
+    // The grid's lines cross the canvas where they cross the page's top left.
+    const align = () => {
+      if (!ascii) return;
+      const r = canvas.getBoundingClientRect();
+      const mod = (a: number, n: number) => ((a % n) + n) % n;
+      s.setAsciiOrigin(mod(-r.left, ascii.cell[0]), mod(-r.top, ascii.cell[1]));
+      dirty = true;
+    };
+    if (ascii) {
+      const a = ascii;
+      document.fonts.load(`${a.weight ?? 400} ${a.fontSize}px ${a.font}`).catch(() => {}).then(() => {
+        s.setAscii(a);
+        align();
+        lettered = true;
+      });
+    }
+    const resize = new ResizeObserver(() => { size(); align(); });
     resize.observe(box);
+    addEventListener('resize', align);
     const seen = new IntersectionObserver(([e]) => { visible = e.isIntersecting; });
     seen.observe(box);
 
@@ -134,6 +156,7 @@
       removeEventListener('pointermove', hover);
       document.documentElement.removeEventListener('pointerleave', leave);
       removeEventListener('deviceorientation', tilt);
+      removeEventListener('resize', align);
       s.dispose();
     };
   });

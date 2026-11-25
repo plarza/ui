@@ -118,7 +118,7 @@ Jarvis's `/v1/chat` is the model.
 
 ## Chrome logo
 
-Any SVG as a chrome object: a rounded rim, a bevel and a flat face, lit by a studio. It comes as a SwiftUI view, a Svelte component, and a CLI that renders stills and videos. Drag it and it keeps turning, then settles; it leans toward the pointer, and on phones with the phone. With `sway` set (degrees) it also rocks on its own, as the CLI's sway video does, easing in from rest.
+Any SVG as a chrome object: a rounded rim, a bevel and a flat face, lit by a studio. It comes as a SwiftUI view, a Svelte component, and a CLI that renders stills and videos. Drag it and it keeps turning, then settles; it leans toward the pointer, and on phones with the phone. With `sway` set (degrees) it also rocks on its own, as the CLI's sway video does, easing in from rest. With `ascii` (Svelte) it is drawn as characters: each cell of a grid takes a character by its brightness, in its own colour, on a grid that lines up with one drawn around it.
 
 ```swift
 ChromeLogo()                                  // the aza mark
